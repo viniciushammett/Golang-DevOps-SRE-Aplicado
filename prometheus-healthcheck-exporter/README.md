@@ -1,6 +1,12 @@
-# Prometheus Healthcheck Exporter (Go)
+## ✨ Visão Geral
+O **Prometheus Healthcheck Exporter** é um mini-exporter escrito em **Golang** para verificar periodicamente URLs HTTP/HTTPS e expor métricas no formato **Prometheus**.
 
-Mini-exporter Prometheus em Go que verifica URLs HTTP periodicamente e expõe métricas de **UP/DOWN**, **latência (ms)** e **status code** em `/metrics`.
+🎯 Ideal para:
+- Times **DevOps/SRE** que precisam monitorar endpoints críticos  
+- Labs de **observabilidade**  
+- Demonstração de skills em **Go** + **Prometheus** + **Kubernetes**  
+
+---
 
 ## ✨ Recursos
 - Checagem de múltiplas URLs com **concorrência configurável**
@@ -13,11 +19,11 @@ Mini-exporter Prometheus em Go que verifica URLs HTTP periodicamente e expõe m�
 
 ```bash
 go run . \
-  -urls "https://example.com,https://httpbin.org/status/204,https://httpbin.org/status/500" \
+  -urls "https://example.com,https://httpbin.org/status/204" \
   -interval 30s -timeout 3s -concurrency 5 -port :8080
 
-# Ver métricas
 curl http://localhost:8080/metrics
+
 ```
 
 | Flag           | Default                                                                             | Descrição                                                  |
@@ -32,7 +38,9 @@ curl http://localhost:8080/metrics
 Build:
 
 ```bash
-make docker-build
+docker build -t healthcheck-exporter:latest .
+docker run --rm -p 8080:8080 healthcheck-exporter:latest \
+  -urls=https://example.com -interval=15s -timeout=2s
 ```
 Run:
 
@@ -42,73 +50,19 @@ make docker-run PORT=8080 URLS="https://example.com,https://httpbin.org/status/5
 curl http://localhost:8080/metrics
 ```
 
-📈 Prometheus (scrape config)
-```yaml
-scrape_configs:
-  - job_name: 'healthcheck_exporter'
-    static_configs:
-      - targets: ['localhost:8080']
+☸️ Kubernetes
+Stack completa com Prometheus Operator + kind: 📂 k8s-exporter-stack.yaml
+```bash
+kind create cluster --name monitoring-lab --config kind-cluster.yaml
+helm repo add prometheus-community https://prometheus-community.github.io/helm-charts
+helm upgrade --install lab-prom prometheus-community/kube-prometheus-stack -n monitoring-lab --create-namespace
+kubectl apply -f k8s-exporter-stack.yaml
+
 ```
-
-☸️ Kubernetes (exemplo rápido)
-```yaml
-apiVersion: apps/v1
-kind: Deployment
-metadata:
-  name: healthcheck-exporter
-spec:
-  replicas: 1
-  selector:
-    matchLabels:
-      app: healthcheck-exporter
-  template:
-    metadata:
-      labels:
-        app: healthcheck-exporter
-    spec:
-      containers:
-        - name: exporter
-          image: healthcheck-exporter:latest
-          args:
-            - -urls=https://example.com,https://httpbin.org/status/500
-            - -interval=30s
-            - -timeout=3s
-            - -concurrency=5
-            - -port=:8080
-          ports:
-            - containerPort: 8080
-          securityContext:
-            runAsNonRoot: true
-            allowPrivilegeEscalation: false
----
-apiVersion: v1
-kind: Service
-metadata:
-  name: healthcheck-exporter
-spec:
-  selector:
-    app: healthcheck-exporter
-  ports:
-    - port: 8080
-      targetPort: 8080
-      name: http
-```
-
-### Prometheus Operator (ServiceMonitor):
-
-```yaml
-apiVersion: monitoring.coreos.com/v1
-kind: ServiceMonitor
-metadata:
-  name: healthcheck-exporter
-spec:
-  selector:
-    matchLabels:
-      app: healthcheck-exporter
-  endpoints:
-    - port: http
-      path: /metrics
-      interval: 30s
+Acesse:
+```bash
+Exporter: kubectl port-forward svc/healthcheck-exporter 8080:8080 -n monitoring-lab
+Prometheus: kubectl port-forward svc/prometheus-operated 9090:9090 -n monitoring-lab
 ```
 
 🧪 Testes
