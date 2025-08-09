@@ -7,10 +7,13 @@ import (
 	"fmt"
 	"net/http"
 	"os"
+	"strings"
+	"sync"
 	"time"
 )
 
-// Release mapeia só os campos que nos interessam da API do GitHub.
+// ---- Tipos ----
+
 type Release struct {
 	TagName     string    `json:"tag_name"`
 	Name        string    `json:"name"`
@@ -18,10 +21,8 @@ type Release struct {
 	PublishedAt time.Time `json:"published_at"`
 }
 
-// Resposta JSON do nosso CLI (quando -json for usado).
 type Out struct {
-	Owner       string    `json:"owner"`
-	Repo        string    `json:"repo"`
+	Repo        string    `json:"repo"` // owner/repo
 	Tag         string    `json:"tag"`
 	Name        string    `json:"name"`
 	URL         string    `json:"url"`
@@ -29,70 +30,11 @@ type Out struct {
 	Error       string    `json:"error,omitempty"`
 }
 
-func main() {
-	// ----- Flags -----
-	owner := flag.String("owner", "", "Dono do repositório (ex.: grafana)")
-	repo := flag.String("repo", "", "Nome do repositório (ex.: grafana)")
-	timeout := flag.Duration("timeout", 5*time.Second, "Timeout da requisição (ex.: 5s, 2s)")
-	asJSON := flag.Bool("json", false, "Imprime saída em JSON")
-	flag.Parse()
+// ---- HTTP / GitHub ----
 
-	// ----- Validação de uso -----
-	if *owner == "" || *repo == "" {
-		fmt.Fprintln(os.Stderr, "uso: go run . -owner <owner> -repo <repo> [-timeout 5s] [-json]")
-		os.Exit(2) // uso inválido
-	}
-
-	// ----- Faz a chamada com timeout e User-Agent -----
-	rel, status, err := fetchLatest(*owner, *repo, *timeout)
-
-	// ----- Saída JSON opcional -----
-	if *asJSON {
-		out := Out{
-			Owner:       *owner,
-			Repo:        *repo,
-			Tag:         rel.TagName,
-			Name:        rel.Name,
-			URL:         rel.HTMLURL,
-			PublishedAt: rel.PublishedAt,
-		}
-		if err != nil {
-			out.Error = err.Error()
-		}
-		_ = json.NewEncoder(os.Stdout).Encode(out)
-		// exit codes coerentes pra automação:
-		if err != nil {
-			if status == 0 {
-				os.Exit(1)
-			}
-			// 404 e 403 também são 1 (falha)
-			os.Exit(1)
-		}
-		os.Exit(0)
-	}
-
-	// ----- Saída humana -----
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "erro: %v\n", err)
-		if status == 403 {
-			fmt.Fprintln(os.Stderr, "dica: use um token do GitHub para aumentar o rate limit (flag futura -token ou GITHUB_TOKEN).")
-		}
-		os.Exit(1)
-	}
-
-	fmt.Printf("Repo: %s/%s\n", *owner, *repo)
-	fmt.Printf("Tag: %s\n", dash(rel.TagName))
-	fmt.Printf("Nome: %s\n", dash(rel.Name))
-	fmt.Printf("Publicado em: %s\n", rel.PublishedAt.Format(time.RFC3339))
-	fmt.Printf("URL: %s\n", rel.HTMLURL)
-	os.Exit(0)
-}
-
-// fetchLatest faz GET em /releases/latest com timeout e trata status comuns.
 func fetchLatest(owner, repo string, timeout time.Duration) (Release, int, error) {
 	var zero Release
 
-	// Contexto com timeout para não travar o CLI se a rede/host estiver lento.
 	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
 
@@ -103,37 +45,42 @@ func fetchLatest(owner, repo string, timeout time.Duration) (Release, int, error
 	if err != nil {
 		return zero, 0, err
 	}
-
-	// GitHub exige User-Agent válido; sem isso pode dar 403.
+	// GitHub exige um User-Agent válido
 	req.Header.Set("User-Agent", "go-cli-learning/1.0")
 
-	// Cliente com timeout adicional (fallback).
 	client := &http.Client{Timeout: timeout}
-
 	resp, err := client.Do(req)
 	if err != nil {
 		return zero, 0, err
 	}
 	defer resp.Body.Close()
 
-	// Trata status comuns antes de tentar decodificar JSON.
 	switch resp.StatusCode {
 	case http.StatusOK:
-		// segue o fluxo
+		// ok
 	case http.StatusNotFound:
-		return zero, resp.StatusCode, fmt.Errorf("repositório sem release ou não encontrado (%s/%s) [404]", owner, repo)
+		return zero, resp.StatusCode, fmt.Errorf("not found (ou sem releases)")
 	case http.StatusForbidden:
-		// geralmente rate limit; podemos inspecionar headers se quiser evoluir
-		return zero, resp.StatusCode, fmt.Errorf("acesso negado/rate limit [403]")
+		return zero, resp.StatusCode, fmt.Errorf("forbidden/rate limit (403) — use token")
 	default:
-		return zero, resp.StatusCode, fmt.Errorf("status inesperado da API: %s", resp.Status)
+		return zero, resp.StatusCode, fmt.Errorf("status inesperado: %s", resp.Status)
 	}
 
 	var rel Release
 	if err := json.NewDecoder(resp.Body).Decode(&rel); err != nil {
-		return zero, resp.StatusCode, fmt.Errorf("falha ao decodificar JSON: %w", err)
+		return zero, resp.StatusCode, fmt.Errorf("decode: %w", err)
 	}
 	return rel, resp.StatusCode, nil
+}
+
+// ---- Aux ----
+
+func splitRepo(s string) (owner, repo string, ok bool) {
+	i := strings.IndexByte(s, '/')
+	if i <= 0 || i == len(s)-1 {
+		return "", "", false
+	}
+	return s[:i], s[i+1:], true
 }
 
 func dash(s string) string {
@@ -143,4 +90,115 @@ func dash(s string) string {
 	return s
 }
 
-// Fim do código.
+// ---- main ----
+
+func main() {
+	// Mantemos -owner/-repo por compatibilidade, mas preferimos -repos
+	owner := flag.String("owner", "", "Dono do repositório (ex.: grafana)")
+	repo := flag.String("repo", "", "Nome do repositório (ex.: grafana)")
+	repos := flag.String("repos", "", "Lista de repositórios owner/repo separados por vírgula")
+	timeout := flag.Duration("timeout", 5*time.Second, "Timeout por requisição (ex.: 5s)")
+	asJSON := flag.Bool("json", false, "Saída em JSON (uma linha por repo - NDJSON)")
+	concurrency := flag.Int("concurrency", 5, "Número máximo de consultas em paralelo")
+	flag.Parse()
+
+	// Monta a lista de repositórios
+	var list []string
+	if *repos != "" {
+		for _, r := range strings.Split(*repos, ",") {
+			r = strings.TrimSpace(r)
+			if r != "" {
+				list = append(list, r)
+			}
+		}
+	} else if *owner != "" && *repo != "" {
+		list = []string{*owner + "/" + *repo}
+	}
+
+	if len(list) == 0 {
+		fmt.Fprintln(os.Stderr, "uso: go run . -repos owner1/repo1,owner2/repo2 [-timeout 5s] [-json] [-concurrency 5]")
+		fmt.Fprintln(os.Stderr, "     ou: go run . -owner grafana -repo grafana")
+		os.Exit(2)
+	}
+	if *concurrency <= 0 {
+		fmt.Fprintln(os.Stderr, "-concurrency deve ser >= 1")
+		os.Exit(2)
+	}
+
+	type result struct {
+		out   Out
+		ok    bool
+		error error
+	}
+
+	sem := make(chan struct{}, *concurrency) // semáforo de paralelismo
+	var wg sync.WaitGroup
+	results := make(chan result)
+
+	for _, full := range list {
+		full := full // captura
+		owner, repo, ok := splitRepo(full)
+		if !ok {
+			// erro de formato já aqui
+			go func() {
+				results <- result{out: Out{Repo: full, Error: "formato inválido (use owner/repo)"}, ok: false, error: fmt.Errorf("formato inválido")}
+			}()
+			continue
+		}
+
+		wg.Add(1)
+		go func(owner, repo, full string) {
+			defer wg.Done()
+			sem <- struct{}{}         // ocupa vaga
+			defer func() { <-sem }()  // libera
+
+			rel, _, err := fetchLatest(owner, repo, *timeout)
+			res := result{
+				out: Out{
+					Repo:        full,
+					Tag:         rel.TagName,
+					Name:        rel.Name,
+					URL:         rel.HTMLURL,
+					PublishedAt: rel.PublishedAt,
+				},
+				ok: err == nil,
+			}
+			if err != nil {
+				res.out.Error = err.Error()
+				res.error = err
+			}
+			results <- res
+		}(owner, repo, full)
+	}
+
+	// Fechar canal quando tudo terminar
+	go func() {
+		wg.Wait()
+		close(results)
+	}()
+
+	exitCode := 0
+
+	// Consome conforme as goroutines terminam (ordem pode variar)
+	for r := range results {
+		if *asJSON {
+			_ = json.NewEncoder(os.Stdout).Encode(r.out) // NDJSON
+		} else {
+			if r.ok {
+				fmt.Printf("[%s]\n", r.out.Repo)
+				fmt.Printf("  Tag: %s\n", dash(r.out.Tag))
+				fmt.Printf("  Nome: %s\n", dash(r.out.Name))
+				fmt.Printf("  Publicado: %s\n", r.out.PublishedAt.Format(time.RFC3339))
+				fmt.Printf("  URL: %s\n", r.out.URL)
+			} else {
+				fmt.Printf("[%s] ERRO: %s\n", r.out.Repo, r.out.Error)
+			}
+		}
+		if !r.ok {
+			exitCode = 1
+		}
+	}
+
+	os.Exit(exitCode)
+}
+// ---- Fim do código ----
