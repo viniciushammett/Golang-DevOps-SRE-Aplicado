@@ -25,9 +25,12 @@ go run .
 go run . \
   -urls "https://example.com,https://httpbin.org/status/204,https://httpbin.org/status/500" \
   -interval 30s -timeout 3s -concurrency 5 -port :8080
+```
 
+```bash
 # Ver métricas
 curl http://localhost:8080/metrics
+```
 
 🔧 Flags
 Flag	Default	Descrição
@@ -43,13 +46,13 @@ GET /metrics — métricas para Prometheus
 
 GET /healthz — liveness do exporter
 
+
 🐳 Docker
 Build:
 
-bash
-Copiar
-Editar
+```bash
 make docker-build
+```
 Run:
 
 bash
