@@ -25,27 +25,18 @@ go run .
 go run . \
   -urls "https://example.com,https://httpbin.org/status/204,https://httpbin.org/status/500" \
   -interval 30s -timeout 3s -concurrency 5 -port :8080
-```
 
-```bash
 # Ver métricas
 curl http://localhost:8080/metrics
 ```
 
-🔧 Flags
-Flag	Default	Descrição
--urls	https://example.com,https://httpbin.org/status/204,https://httpbin.org/status/500	Lista de URLs separadas por vírgula
--interval	30s	Intervalo de checagem (ex.: 15s, 1m)
--timeout	3s	Timeout por requisição
--port	:8080	Host/porta do servidor HTTP (:8080, 0.0.0.0:8080 etc.)
--concurrency	5	Máximo de checagens simultâneas por rodada
-
-Endpoints:
-
-GET /metrics — métricas para Prometheus
-
-GET /healthz — liveness do exporter
-
+| Flag           | Default                                                                             | Descrição                                                  |
+| -------------- | ----------------------------------------------------------------------------------- | ---------------------------------------------------------- |
+| `-urls`        | `https://example.com,https://httpbin.org/status/204,https://httpbin.org/status/500` | Lista de URLs separadas por vírgula                        |
+| `-interval`    | `30s`                                                                               | Intervalo de checagem (ex.: `15s`, `1m`)                   |
+| `-timeout`     | `3s`                                                                                | Timeout por requisição                                     |
+| `-port`        | `:8080`                                                                             | Host/porta do servidor HTTP (`:8080`, `0.0.0.0:8080` etc.) |
+| `-concurrency` | `5`                                                                                 | Máximo de checagens simultâneas por rodada                 |
 
 🐳 Docker
 Build:
@@ -55,24 +46,22 @@ make docker-build
 ```
 Run:
 
-bash
-Copiar
-Editar
+```bash
 make docker-run PORT=8080 URLS="https://example.com,https://httpbin.org/status/500" INTERVAL=15s TIMEOUT=2s CONCURRENCY=5
 # depois:
 curl http://localhost:8080/metrics
+```
+
 📈 Prometheus (scrape config)
-yaml
-Copiar
-Editar
+```yaml
 scrape_configs:
   - job_name: 'healthcheck_exporter'
     static_configs:
       - targets: ['localhost:8080']
+```
+
 ☸️ Kubernetes (exemplo rápido)
-yaml
-Copiar
-Editar
+```yaml
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -113,11 +102,11 @@ spec:
     - port: 8080
       targetPort: 8080
       name: http
-Prometheus Operator (opcional - ServiceMonitor):
+```
 
-yaml
-Copiar
-Editar
+### Prometheus Operator (opcional - ServiceMonitor):
+
+```yaml
 apiVersion: monitoring.coreos.com/v1
 kind: ServiceMonitor
 metadata:
@@ -130,27 +119,23 @@ spec:
     - port: http
       path: /metrics
       interval: 30s
+```
+
 🧪 Testes
 Estrutura pronta para adicionar testes:
 
-bash
-Copiar
-Editar
+```bash
 make test
+```
+
 🔒 Segurança
-Imagem distroless e não-root
-
-Somente porta HTTP exposta
-
-Sem persistência de dados
+- Imagem distroless e não-root
+- Somente porta HTTP exposta
+- Sem persistência de dados
 
 🗺️ Roadmap
-Retries/backoff por URL (com métricas de tentativa)
-
-Labels extras (hostname, grupo, ambiente)
-
-Config via arquivo YAML/ENV
-
-Histogram para tempo em vez de gauge
-
-Healthcheck TCP/HTTPS avançado (SNI, headers custom)
+- Retries/backoff por URL (com métricas de tentativa)
+- Labels extras (hostname, grupo, ambiente)
+- Config via arquivo YAML/ENV
+- Histogram para tempo em vez de gauge
+- Healthcheck TCP/HTTPS avançado (SNI, headers custom)
