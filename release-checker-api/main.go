@@ -8,6 +8,7 @@ import (
 	"net"
 	"net/http"
 	"os"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -22,6 +23,12 @@ type Release struct {
 	PublishedAt time.Time `json:"published_at"`
 }
 
+type RateInfo struct {
+	Limit     int   `json:"limit,omitempty"`
+	Remaining int   `json:"remaining,omitempty"`
+	ResetUnix int64 `json:"reset_unix,omitempty"`
+}
+
 type Out struct {
 	Repo        string    `json:"repo"` // owner/repo
 	Tag         string    `json:"tag"`
@@ -30,6 +37,7 @@ type Out struct {
 	PublishedAt time.Time `json:"published_at"`
 	DurationMS  int64     `json:"duration_ms"`
 	Error       string    `json:"error,omitempty"`
+	Rate        *RateInfo `json:"rate,omitempty"` // opcional, controlado por -ratelimit
 }
 
 // ---- Aux ----
@@ -49,21 +57,16 @@ func dash(s string) string {
 	return s
 }
 
-// Verifica se deve retry (apenas erros transitórios)
 func isRetryable(status int, err error) bool {
-	// 5xx -> geralmente transitório
 	if status >= 500 && status <= 599 {
 		return true
 	}
-	// Erros de rede/timeout
 	if err != nil {
-		// context deadline/cancel
 		if ne, ok := err.(net.Error); ok {
 			if ne.Timeout() || ne.Temporary() {
 				return true
 			}
 		}
-		// generic timeout string (quando vem de context)
 		if strings.Contains(strings.ToLower(err.Error()), "timeout") {
 			return true
 		}
@@ -71,12 +74,41 @@ func isRetryable(status int, err error) bool {
 	return false
 }
 
+// parseRate lê X-RateLimit-* dos headers
+func parseRate(h http.Header) RateInfo {
+	ri := RateInfo{}
+	if v := h.Get("X-RateLimit-Limit"); v != "" {
+		if n, err := strconv.Atoi(v); err == nil {
+			ri.Limit = n
+		}
+	}
+	if v := h.Get("X-RateLimit-Remaining"); v != "" {
+		if n, err := strconv.Atoi(v); err == nil {
+			ri.Remaining = n
+		}
+	}
+	if v := h.Get("X-RateLimit-Reset"); v != "" {
+		if n, err := strconv.ParseInt(v, 10, 64); err == nil {
+			ri.ResetUnix = n
+		}
+	}
+	return ri
+}
+
+func humanReset(ts int64) string {
+	if ts == 0 {
+		return "-"
+	}
+	return time.Unix(ts, 0).Format(time.RFC3339)
+}
+
 // ---- HTTP / GitHub ----
 
 // fetchLatest executa UMA tentativa, com timeout e (opcional) token.
-// Retorna release, status HTTP, duração em ms e erro.
-func fetchLatest(owner, repo string, timeout time.Duration, token string) (Release, int, int64, error) {
+// Retorna release, status HTTP, duração em ms, rate info e erro.
+func fetchLatest(owner, repo string, timeout time.Duration, token string) (Release, int, int64, RateInfo, error) {
 	var zero Release
+	var zr RateInfo
 
 	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
@@ -84,11 +116,10 @@ func fetchLatest(owner, repo string, timeout time.Duration, token string) (Relea
 	url := fmt.Sprintf("https://api.github.com/repos/%s/%s/releases/latest", owner, repo)
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
 	if err != nil {
-		return zero, 0, 0, err
+		return zero, 0, 0, zr, err
 	}
 	req.Header.Set("User-Agent", "go-cli-learning/1.0")
 	if token != "" {
-		// GitHub REST v3 aceita "token <TOKEN>"
 		req.Header.Set("Authorization", "token "+token)
 	}
 
@@ -98,53 +129,55 @@ func fetchLatest(owner, repo string, timeout time.Duration, token string) (Relea
 	resp, err := client.Do(req)
 	elapsed := time.Since(start).Milliseconds()
 	if err != nil {
-		return zero, 0, elapsed, err
+		return zero, 0, elapsed, zr, err
 	}
 	defer resp.Body.Close()
+
+	rate := parseRate(resp.Header)
 
 	switch resp.StatusCode {
 	case http.StatusOK:
 		// segue
 	case http.StatusNotFound:
-		return zero, resp.StatusCode, elapsed, fmt.Errorf("not found (ou sem releases)")
+		return zero, resp.StatusCode, elapsed, rate, fmt.Errorf("not found (ou sem releases)")
 	case http.StatusForbidden:
-		// Geralmente rate limit sem token suficiente
-		return zero, resp.StatusCode, elapsed, fmt.Errorf("forbidden/rate limit (403) — forneça -token ou GITHUB_TOKEN")
+		// Geralmente rate limit; headers trazem remaining/reset
+		return zero, resp.StatusCode, elapsed, rate, fmt.Errorf("forbidden/rate limit (403) — remaining=%d reset=%s", rate.Remaining, humanReset(rate.ResetUnix))
 	default:
 		if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-			return zero, resp.StatusCode, elapsed, fmt.Errorf("status inesperado: %s", resp.Status)
+			return zero, resp.StatusCode, elapsed, rate, fmt.Errorf("status inesperado: %s", resp.Status)
 		}
 	}
 
 	var rel Release
 	if err := json.NewDecoder(resp.Body).Decode(&rel); err != nil {
-		return zero, resp.StatusCode, elapsed, fmt.Errorf("decode: %w", err)
+		return zero, resp.StatusCode, elapsed, rate, fmt.Errorf("decode: %w", err)
 	}
-	return rel, resp.StatusCode, elapsed, nil
+	return rel, resp.StatusCode, elapsed, rate, nil
 }
 
-// fetchWithRetries aplica backoff exponencial: base * 2^tentativa (1,2,4,...)
-func fetchWithRetries(owner, repo string, timeout time.Duration, token string, retries int, backoffBase time.Duration) (Release, int, int64, error) {
+// fetchWithRetries aplica backoff exponencial: base * 2^attempt
+func fetchWithRetries(owner, repo string, timeout time.Duration, token string, retries int, backoffBase time.Duration) (Release, int, int64, RateInfo, error) {
 	var lastRel Release
 	var lastStatus int
 	var lastDur int64
+	var lastRate RateInfo
 	var lastErr error
 
 	for attempt := 0; attempt <= retries; attempt++ {
-		rel, status, dur, err := fetchLatest(owner, repo, timeout, token)
-		lastRel, lastStatus, lastDur, lastErr = rel, status, dur, err
+		rel, status, dur, rate, err := fetchLatest(owner, repo, timeout, token)
+		lastRel, lastStatus, lastDur, lastRate, lastErr = rel, status, dur, rate, err
 
 		if err == nil {
-			return rel, status, dur, nil
+			return rel, status, dur, rate, nil
 		}
 		if !isRetryable(status, err) || attempt == retries {
 			break
 		}
-		// Backoff exponencial: base * 2^attempt (attempt inicia em 0)
 		sleep := backoffBase << attempt
 		time.Sleep(sleep)
 	}
-	return lastRel, lastStatus, lastDur, lastErr
+	return lastRel, lastStatus, lastDur, lastRate, lastErr
 }
 
 // ---- main ----
@@ -160,9 +193,9 @@ func main() {
 	backoff := flag.Duration("backoff", 300*time.Millisecond, "Backoff base para retries (ex.: 300ms)")
 	tokenFlag := flag.String("token", "", "GitHub token (opcional). Se vazio, usa env GITHUB_TOKEN.")
 	summary := flag.Bool("summary", true, "Imprime resumo final (OK/FAIL) ao terminar")
+	showRate := flag.Bool("ratelimit", false, "Exibe informações de rate limit (X-RateLimit-*)")
 	flag.Parse()
 
-	// Lista de repositórios
 	var list []string
 	if *repos != "" {
 		for _, r := range strings.Split(*repos, ",") {
@@ -174,9 +207,8 @@ func main() {
 	} else if *owner != "" && *repo != "" {
 		list = []string{*owner + "/" + *repo}
 	}
-
 	if len(list) == 0 {
-		fmt.Fprintln(os.Stderr, "uso: go run . -repos owner1/repo1,owner2/repo2 [-timeout 5s] [-json] [-concurrency 5] [-retries 2] [-backoff 300ms] [-token <...>] [-summary]")
+		fmt.Fprintln(os.Stderr, "uso: go run . -repos owner1/repo1,owner2/repo2 [-timeout 5s] [-json] [-concurrency 5] [-retries 2] [-backoff 300ms] [-token <...>] [-summary] [-ratelimit]")
 		fmt.Fprintln(os.Stderr, "     ou: go run . -owner grafana -repo grafana")
 		os.Exit(2)
 	}
@@ -185,7 +217,6 @@ func main() {
 		os.Exit(2)
 	}
 
-	// Token: flag > env
 	token := *tokenFlag
 	if token == "" {
 		token = os.Getenv("GITHUB_TOKEN")
@@ -225,7 +256,7 @@ func main() {
 			sem <- struct{}{}
 			defer func() { <-sem }()
 
-			rel, _, dur, err := fetchWithRetries(owner, repo, *timeout, token, *retries, *backoff)
+			rel, _, dur, rate, err := fetchWithRetries(owner, repo, *timeout, token, *retries, *backoff)
 			r := result{
 				out: Out{
 					Repo:        full,
@@ -237,6 +268,9 @@ func main() {
 				},
 				ok: err == nil,
 			}
+			if *showRate {
+				r.out.Rate = &rate
+			}
 			if err != nil {
 				r.out.Error = err.Error()
 			}
@@ -244,7 +278,6 @@ func main() {
 		}(owner, repo, full)
 	}
 
-	// Fechar canal quando tudo acabar
 	go func() {
 		wg.Wait()
 		close(results)
@@ -254,7 +287,7 @@ func main() {
 
 	for r := range results {
 		if *asJSON {
-			_ = json.NewEncoder(os.Stdout).Encode(r.out) // NDJSON
+			_ = json.NewEncoder(os.Stdout).Encode(r.out)
 		} else {
 			if r.ok {
 				fmt.Printf("[%s] OK  tag=%s  name=%s  ms=%d  url=%s\n",
@@ -262,6 +295,10 @@ func main() {
 			} else {
 				fmt.Printf("[%s] FAIL  err=%s  ms=%d\n",
 					r.out.Repo, r.out.Error, r.out.DurationMS)
+			}
+			if *showRate && r.out.Rate != nil {
+				fmt.Printf("   rate: limit=%d remaining=%d reset=%s\n",
+					r.out.Rate.Limit, r.out.Rate.Remaining, humanReset(r.out.Rate.ResetUnix))
 			}
 		}
 
@@ -282,8 +319,7 @@ func main() {
 				Total int      `json:"total"`
 				Repos []string `json:"failed_repos,omitempty"`
 			}{
-				Ok: okCount, Fail: failCount, Total: okCount + failCount,
-				Repos: failed,
+				Ok: okCount, Fail: failCount, Total: okCount + failCount, Repos: failed,
 			}
 			_ = json.NewEncoder(os.Stdout).Encode(sum)
 		} else {
