@@ -1,0 +1,143 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: monitoring-lab
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: healthcheck-exporter
+  namespace: monitoring-lab
+  labels:
+    app: healthcheck-exporter
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: healthcheck-exporter
+  template:
+    metadata:
+      labels:
+        app: healthcheck-exporter
+    spec:
+      securityContext:
+        runAsNonRoot: true
+      containers:
+        - name: exporter
+          # Altere se publicar em um registry: ghcr.io/<user>/healthcheck-exporter:latest
+          image: healthcheck-exporter:latest
+          imagePullPolicy: IfNotPresent
+          args:
+            - -urls=https://example.com,https://httpbin.org/status/500
+            - -interval=30s
+            - -timeout=3s
+            - -concurrency=5
+            - -port=:8080
+          ports:
+            - containerPort: 8080
+              name: http
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: http
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          readinessProbe:
+            httpGet:
+              path: /metrics
+              port: http
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          resources:
+            requests:
+              cpu: 20m
+              memory: 32Mi
+            limits:
+              cpu: 200m
+              memory: 128Mi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: healthcheck-exporter
+  namespace: monitoring-lab
+  labels:
+    app: healthcheck-exporter
+spec:
+  type: ClusterIP
+  selector:
+    app: healthcheck-exporter
+  ports:
+    - name: http
+      port: 8080
+      targetPort: http
+---
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: healthcheck-exporter
+  namespace: monitoring-lab
+  labels:
+    # IMPORTANTE: este label será usado pelo Prometheus CR para selecionar este ServiceMonitor
+    release: lab-prom
+spec:
+  selector:
+    matchLabels:
+      app: healthcheck-exporter
+  namespaceSelector:
+    matchNames:
+      - monitoring-lab
+  endpoints:
+    - port: http
+      path: /metrics
+      interval: 30s
+      scrapeTimeout: 5s
+      scheme: http
+---
+# Prometheus CR (requer Prometheus Operator instalado)
+apiVersion: monitoring.coreos.com/v1
+kind: Prometheus
+metadata:
+  name: lab
+  namespace: monitoring-lab
+  labels:
+    app: prometheus
+spec:
+  replicas: 1
+  serviceAccountName: prometheus-k8s
+  serviceMonitorSelector:
+    matchLabels:
+      release: lab-prom         # <- vai pegar nosso ServiceMonitor
+  serviceMonitorNamespaceSelector:
+    matchNames:
+      - monitoring-lab
+  resources:
+    requests:
+      memory: 400Mi
+      cpu: 100m
+  retention: 24h
+  enableAdminAPI: false
+  securityContext:
+    runAsNonRoot: true
+  ruleSelector: {}
+---
+# Service "operated" criado/gerenciado pelo Operator para expor o Prometheus
+apiVersion: v1
+kind: Service
+metadata:
+  name: prometheus-operated
+  namespace: monitoring-lab
+  labels:
+    operated-prometheus: "true"
+spec:
+  clusterIP: None
+  ports:
+    - name: web
+      port: 9090
+      targetPort: web
+  selector:
+    app.kubernetes.io/name: prometheus
+    prometheus: lab
