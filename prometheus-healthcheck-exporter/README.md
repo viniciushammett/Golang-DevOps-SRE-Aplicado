@@ -94,7 +94,7 @@ spec:
       name: http
 ```
 
-### Prometheus Operator (opcional - ServiceMonitor):
+### Prometheus Operator (ServiceMonitor):
 
 ```yaml
 apiVersion: monitoring.coreos.com/v1
