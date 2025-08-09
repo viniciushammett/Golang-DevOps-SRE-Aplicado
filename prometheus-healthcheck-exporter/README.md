@@ -1,6 +1,6 @@
 # Prometheus Healthcheck Exporter (Go)
 
-Mini-exporter Prometheus em Go que verifica URLs HTTP periodicamente e expõe métricas de **UP/DOWN**, **latência (ms)** e **status code** em `/metrics`. Ideal para portfolio DevOps/SRE e para aprender Go com um caso real.
+Mini-exporter Prometheus em Go que verifica URLs HTTP periodicamente e expõe métricas de **UP/DOWN**, **latência (ms)** e **status code** em `/metrics`.
 
 ## ✨ Recursos
 - Checagem de múltiplas URLs com **concorrência configurável**
@@ -10,16 +10,6 @@ Mini-exporter Prometheus em Go que verifica URLs HTTP periodicamente e expõe m�
 - Código simples e idiomático em Go
 
 ## 🚀 Executar localmente
-
-### Como inicializar o projeto
-
-```bash
-mkdir -p prometheus-healthcheck-exporter
-cd prometheus-healthcheck-exporter
-go mod init github.com/seuusuario/prometheus-healthcheck-exporter
-# crie o main.go com o conteúdo acima
-go run .
-```
 
 ```bash
 go run . \
