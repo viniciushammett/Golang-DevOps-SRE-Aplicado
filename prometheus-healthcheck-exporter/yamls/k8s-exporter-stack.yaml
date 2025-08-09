@@ -24,7 +24,6 @@ spec:
         runAsNonRoot: true
       containers:
         - name: exporter
-          # Altere se publicar em um registry: ghcr.io/<user>/healthcheck-exporter:latest
           image: healthcheck-exporter:latest
           imagePullPolicy: IfNotPresent
           args:
@@ -81,7 +80,6 @@ metadata:
   name: healthcheck-exporter
   namespace: monitoring-lab
   labels:
-    # IMPORTANTE: este label será usado pelo Prometheus CR para selecionar este ServiceMonitor
     release: lab-prom
 spec:
   selector:
@@ -96,48 +94,3 @@ spec:
       interval: 30s
       scrapeTimeout: 5s
       scheme: http
----
-# Prometheus CR (requer Prometheus Operator instalado)
-apiVersion: monitoring.coreos.com/v1
-kind: Prometheus
-metadata:
-  name: lab
-  namespace: monitoring-lab
-  labels:
-    app: prometheus
-spec:
-  replicas: 1
-  serviceAccountName: prometheus-k8s
-  serviceMonitorSelector:
-    matchLabels:
-      release: lab-prom         # <- vai pegar nosso ServiceMonitor
-  serviceMonitorNamespaceSelector:
-    matchNames:
-      - monitoring-lab
-  resources:
-    requests:
-      memory: 400Mi
-      cpu: 100m
-  retention: 24h
-  enableAdminAPI: false
-  securityContext:
-    runAsNonRoot: true
-  ruleSelector: {}
----
-# Service "operated" criado/gerenciado pelo Operator para expor o Prometheus
-apiVersion: v1
-kind: Service
-metadata:
-  name: prometheus-operated
-  namespace: monitoring-lab
-  labels:
-    operated-prometheus: "true"
-spec:
-  clusterIP: None
-  ports:
-    - name: web
-      port: 9090
-      targetPort: web
-  selector:
-    app.kubernetes.io/name: prometheus
-    prometheus: lab
