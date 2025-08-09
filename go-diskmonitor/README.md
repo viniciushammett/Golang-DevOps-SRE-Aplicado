@@ -1,34 +1,42 @@
 <div align="center">
   <h1>📊 Monitor Disk Usage</h1>
-  <p>Ferramenta de linha de comando em Go para exibir estatísticas de uso de disco de um diretório</p>
+  <p>Ferramenta de linha de comando em <b>Go</b> para exibir estatísticas detalhadas de uso de disco em sistemas Unix-like</p>
+  <img src="https://img.shields.io/badge/platform-linux%20%7C%20macos-lightgrey?style=flat-square" />
 </div>
 
 ---
 
 ## 📖 Descrição
-O **Monitor Disk Usage** é uma ferramenta de linha de comando que exibe estatísticas de uso de disco para um diretório especificado, incluindo:
 
-- Espaço **total**
-- Espaço **usado**
-- Espaço **livre**
+O **Monitor Disk Usage** é uma **CLI (Command Line Interface)** desenvolvida em Go que coleta e exibe estatísticas do uso de disco para um diretório ou arquivo específico.  
+As informações incluem:
 
-Inclui tratamento de erros para caminhos inválidos.
+- **Espaço total** do filesystem.
+- **Espaço usado** (considerando blocos reservados).
+- **Espaço livre para o usuário** (desconsiderando blocos reservados ao root).
+- **Percentual de uso**.
+
+⚙️ Internamente, a ferramenta utiliza `syscall.Statfs` para obter métricas diretamente do kernel, garantindo precisão e baixo overhead.
 
 ---
 
 ## ✨ Recursos
-- Recebe o caminho do diretório como argumento na linha de comando.
-- Saída no formato legível por humanos.
-- Tratamento de erros para diretórios inexistentes ou sem permissão.
+
+- Aceita **diretórios** ou **arquivos** como caminho de análise.
+- Argumentos via **flag** (`-path`) ou **posicional**.
+- Saída **legível** (formato IEC — GiB, MiB, etc.).
+- Opção para exibir **bytes crus** (`-human=false`).
+- Tratamento de erros com mensagens claras e códigos de saída adequados.
+- Compatível com **Linux** e **macOS** (via build tags).
 
 ---
 
-## 🛠 Uso
-```bash
-go run disk_usage.go /caminho/do/diretorio
+## 🛠 Instalação
 
-Directory: /home/user
-Total: 500 GB
-Used: 312 GB
-Free: 188 GB
-```
+```bash
+# Clonar repositório
+git clone https://github.com/SEU_USUARIO/monitor-disk-usage.git
+cd monitor-disk-usage
+
+# Compilar binário
+go build -o disk-usage
