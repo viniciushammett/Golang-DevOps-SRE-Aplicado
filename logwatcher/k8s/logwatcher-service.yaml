@@ -1,0 +1,15 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: logwatcher
+  namespace: logwatcher
+  labels:
+    app: logwatcher
+spec:
+  selector:
+    app: logwatcher
+  ports:
+    - name: http-metrics
+      port: 9100
+      targetPort: http-metrics
+      protocol: TCP

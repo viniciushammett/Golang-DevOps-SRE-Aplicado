@@ -1,0 +1,14 @@
+# Go / editor
+bin/
+dist/
+build/
+*.out
+*.log
+*.tmp
+*.swp
+.idea/
+.vscode/
+coverage*
+# vcs
+.git
+.gitignore

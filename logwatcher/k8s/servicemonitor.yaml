@@ -1,0 +1,15 @@
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: logwatcher
+  namespace: logwatcher
+  labels:
+    release: prometheus  # ajuste para bater com seu operator (ex.: 'kube-prometheus-stack')
+spec:
+  selector:
+    matchLabels:
+      app: logwatcher
+  endpoints:
+    - port: http-metrics
+      path: /metrics
+      interval: 30s

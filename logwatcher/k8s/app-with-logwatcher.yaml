@@ -1,0 +1,49 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: myapp-with-logwatcher
+  namespace: logwatcher
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: myapp-with-logwatcher
+  template:
+    metadata:
+      labels:
+        app: myapp-with-logwatcher
+    spec:
+      volumes:
+        - name: applogs
+          emptyDir: {}
+      containers:
+        - name: myapp
+          image: busybox
+          command: ["sh", "-c"]
+          args:
+            - >
+              while true; do
+                echo "$(date) ERROR: simulated error" >> /logs/app.log;
+                sleep 3;
+              done
+          volumeMounts:
+            - name: applogs
+              mountPath: /logs
+        - name: logwatcher
+          image: logwatcher:latest
+          args:
+            - -file=/logs/app.log
+            - -pattern=(?i)error
+            - -metrics-addr=:9100
+          ports:
+            - name: http-metrics
+              containerPort: 9100
+          volumeMounts:
+            - name: applogs
+              mountPath: /logs
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            runAsNonRoot: true
+            runAsUser: 65532
+            runAsGroup: 65532

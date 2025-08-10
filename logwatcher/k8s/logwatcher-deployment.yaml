@@ -1,0 +1,62 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: logwatcher
+  namespace: logwatcher
+  labels:
+    app: logwatcher
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: logwatcher
+  template:
+    metadata:
+      labels:
+        app: logwatcher
+    spec:
+      # Permite ler logs do host
+      volumes:
+        - name: varlog
+          hostPath:
+            path: /var/log/containers
+            type: Directory
+      containers:
+        - name: logwatcher
+          image: logwatcher:latest
+          imagePullPolicy: IfNotPresent
+          args:
+            - -files=/hostlogs/*.log
+            - -pattern=(?i)(error|critical|panic)
+            - -poll=300ms
+            - -cooldown=30s
+            - -bundle-window=5s
+            - -bundle-max=20
+            - -metrics-addr=:9100
+            # Webhook (opcional) — se usar, injete via env/secret:
+            # - -webhook=$(WEBHOOK_URL)
+            # - -channel=$(WEBHOOK_CHANNEL)
+            # - -title=[prod]
+          env:
+            - name: WEBHOOK_URL
+              valueFrom:
+                secretKeyRef:
+                  name: logwatcher-webhook
+                  key: url
+            - name: WEBHOOK_CHANNEL
+              value: "alerts"
+          ports:
+            - name: http-metrics
+              containerPort: 9100
+          volumeMounts:
+            - name: varlog
+              mountPath: /hostlogs
+              readOnly: true
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            runAsNonRoot: true
+            runAsUser: 65532
+            runAsGroup: 65532
+      securityContext:
+        fsGroup: 65532
