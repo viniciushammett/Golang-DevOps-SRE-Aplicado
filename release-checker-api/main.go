@@ -574,7 +574,7 @@ func main() {
 			}
 			_ = json.NewEncoder(os.Stdout).Encode(sum)
 
-			// PASSO 7: gravar summary JSON em arquivo (opcional)
+			// Gravar summary JSON em arquivo
 			if *summaryJSONPath != "" {
 				_ = writeJSONFile(*summaryJSONPath, sum)
 			}
