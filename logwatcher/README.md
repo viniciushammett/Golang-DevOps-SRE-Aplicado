@@ -1,125 +1,188 @@
 <div align="center">
-  <h1>🧾 logwatcher</h1>
-  <p>Tail de logs em Go com regex, rotação, múltiplos arquivos, deduplicação/cooldown, métricas Prometheus e alertas via webhook</p>
-
-  <img src="https://img.shields.io/badge/Go-1.22+-blue?style=flat-square&logo=go" />
-  <img src="https://img.shields.io/badge/platform-linux%20%7C%20macos-lightgrey?style=flat-square" />
-  <img src="https://img.shields.io/badge/license-MIT-green?style=flat-square" />
+  <h1>📜 Logwatcher</h1>
+  <p>Monitoramento de logs com alertas e métricas para Prometheus — desenvolvido em Go</p>
 </div>
 
 ---
 
 ## 📖 Descrição
 
-O **logwatcher** segue (tail -f) um ou vários arquivos de log, aplica um filtro por **regex**, trata **rotação/truncamento** automaticamente, agrupa ocorrências com **deduplicação/cooldown** para evitar spam, expõe **métricas Prometheus** em `/metrics` e envia **alertas via webhook** (Slack/Discord).
+O **Logwatcher** é uma ferramenta em Go para monitorar arquivos de log, detectar padrões de interesse (como erros críticos) e:
+
+- Enviar alertas para **Slack/Discord** via Webhook.
+- Expor métricas no formato **Prometheus** (`/metrics`).
+- Trabalhar com múltiplos arquivos em paralelo, incluindo rotação de logs.
+- Evitar spam através de **cooldown** e agrupamento de eventos.
+
+Este projeto foi criado como parte da trilha de aprendizado prático de **DevOps/SRE com Golang**.
 
 ---
 
-## ✨ Recursos
+## ✨ Recursos Principais
 
-- **Regex**: filtre linhas em tempo real (ex.: `(?i)error|critical`).
-- **Rotação**: detecta rename/remove/create e truncamento com `fsnotify`.
-- **Múltiplos arquivos**: use `-files` com glob (ex.: `"/var/log/nginx/*.log,/var/log/app/*.log"`).
-- **Deduplicação/Cooldown**: agrupa N ocorrências em X segundos antes de alertar.
-- **Prometheus**: expõe métricas úteis de leitura e matches.
-- **Webhooks (Slack/Discord)**: envia payload consolidado com título/canal.
+- **Múltiplos arquivos** com `filepath.Glob` (`-files "/var/log/nginx/*.log"`).
+- **Detecção de rotação** de logs por inode/tamanho.
+- **Buffer de deduplicação** e janela de cooldown.
+- **Webhook** Slack/Discord configurável via flags/env.
+- **/metrics** Prometheus com contadores por padrão e arquivo.
 
 ---
 
-## 🛠 Instalação
+## 🚀 Como Usar
+
+### Instalação local
 
 ```bash
-git clone https://github.com/viniciushammett/Golang-DevOps-SRE-Aplicado.git
-cd Golang-DevOps-SRE-Aplicado/logwatcher
+git clone https://github.com/<seu-usuario>/<seu-repo>.git
+cd logwatcher
 
-go mod init github.com/viniciushammett/Golang-DevOps-SRE-Aplicado/logwatcher
-go get github.com/fsnotify/fsnotify
-go get github.com/prometheus/client_golang/prometheus
-go get github.com/prometheus/client_golang/prometheus/promhttp
+go mod init github.com/<seu-usuario>/logwatcher
 go mod tidy
-```
----
-## 🚀 Uso
 
-## 1) Um arquivo, sem webhook
+go build -o logwatcher .
+```
+## Execução básica
+
 ```bash
-go run . \
-  -file /var/log/syslog \
-  -pattern '(?i)error|critical' \
-  -poll 300ms \
-  -metrics-addr :9100
-# /metrics disponível em http://localhost:9100/metrics
+./logwatcher \
+  -files="/var/log/syslog" \
+  -pattern="(?i)(error|critical)" \
+  -metrics-addr=":9100"
 ```
-## 2) Múltiplos arquivos (glob), webhook Slack/Discord
+## Com Webhook para Slack
+
 ```bash
-go run . \
-  -files "/var/log/nginx/*.log,/var/log/app/*.log" \
-  -pattern '(?i)(error|critical|panic)' \
-  -cooldown 30s -bundle-window 5s -bundle-max 20 \
-  -webhook "https://hooks.slack.com/services/XXX/YYY/ZZZ" \
-  -channel "alerts" \
-  -title "[prod] nginx" \
-  -metrics-addr :9100
+./logwatcher \
+  -files="/var/log/syslog" \
+  -pattern="(?i)(error|critical)" \
+  -metrics-addr=":9100" \
+  -webhook="$WEBHOOK_URL" \
+  -channel="alerts" \
+  -title="[prod]"
 ```
-## 3) Ler desde o início (como `tail -fn +1`)
+## 🐳 Docker
+
+Build
 ```bash
-go run . -file /var/log/syslog -from-start -pattern '(?i)error'
-
+docker build -t logwatcher:latest .
 ```
-📋 Flags
-| Flag             | Padrão         | Descrição                                                                                
-| ---------------- | -------------- | ---------------------------------------------------------------------------------------- |
-| `-file`          | `""`           | Caminho de um arquivo único.                                                             |
-| `-files`         | `""`           | Lista de globs separados por vírgula (ex.: `"/var/log/nginx/*.log,/var/log/app/*.log"`). |
-| `-pattern`       | `""`           | Regex para filtrar linhas (ex.: \`(?i)error critical\`). Se vazio, imprime todas as linhas.|
-| `-from-start`    | `false`        | Lê desde o início do arquivo (senão segue do fim).                                       |
-| `-poll`          | `300ms`        | Intervalo de polling quando não há novas linhas.                                         |
-| `-cooldown`      | `30s`          | Janela para evitar spam de alertas por (arquivo+regex).                                  |
-| `-bundle-window` | `5s`           | Janela de agregação antes de enviar o alerta.                                            |
-| `-bundle-max`    | `20`           | Máximo de linhas por alerta.                                                             |
-| `-metrics-addr`  | `""`           | Endereço para expor `/metrics` (ex.: `:9100`).                                           |
-| `-webhook`       | `""`           | URL do Webhook (Slack/Discord). Vazio = sem envio.                                       |
-| `-channel`       | `""`           | Nome do canal (opcional, útil no Slack).                                                 |
-| `-title`         | `"Logwatcher"` | Título/Prefixo do alerta enviado.                                                        |
+Execução
+```bash
+docker run --rm \
+  -v /var/log:/var/log:ro \
+  -p 9100:9100 \
+  logwatcher:latest \
+  -files=/var/log/syslog \
+  -pattern="(?i)(error|critical)" \
+  -metrics-addr=:9100
+```
+## ☸️ Kubernetes
 
----
+O Logwatcher pode ser executado no Kubernetes monitorando logs do host ou de aplicações específicas.
 
-📈 Métricas Prometheus
-- `logwatcher_lines_read_total{file}`
-- `logwatcher_matches_total{file,pattern}`
-- `logwatcher_alerts_sent_total{file,pattern}`
-- `logwatcher_last_match_timestamp_seconds{file,pattern}`
-- `logwatcher_active_targets`
-
-Exemplo de `scrape_config`:
+Namespace
 ```yaml
-scrape_configs:
-  - job_name: 'logwatcher'
-    static_configs:
-      - targets: ['localhost:9100']
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: logwatcher
+```
+Deployment + Service
+```yaml
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: logwatcher
+  namespace: logwatcher
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: logwatcher
+  template:
+    metadata:
+      labels:
+        app: logwatcher
+    spec:
+      volumes:
+        - name: varlog
+          hostPath:
+            path: /var/log/containers
+            type: Directory
+      containers:
+        - name: logwatcher
+          image: logwatcher:latest
+          args:
+            - -files=/hostlogs/*.log
+            - -pattern=(?i)(error|critical|panic)
+            - -metrics-addr=:9100
+          ports:
+            - name: http-metrics
+              containerPort: 9100
+          volumeMounts:
+            - name: varlog
+              mountPath: /hostlogs
+              readOnly: true
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 65532
+```
+Service
+```yaml
+apiVersion: v1
+kind: Service
+metadata:
+  name: logwatcher
+  namespace: logwatcher
+spec:
+  selector:
+    app: logwatcher
+  ports:
+    - name: http-metrics
+      port: 9100
+      targetPort: http-metrics
+```
+## 📊 Integração com Prometheus
+Se você usa Prometheus Operator, crie um `ServiceMonitor`:
+```yaml
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: logwatcher
+  namespace: logwatcher
+spec:
+  selector:
+    matchLabels:
+      app: logwatcher
+  endpoints:
+    - port: http-metrics
+      path: /metrics
+      interval: 30s
 ```
 ---
-🧪 Testes manuais
-Em um terminal:
-```bash
-go run . -file /var/log/syslog -pattern '(?i)error|critical' -metrics-addr :9100
-```
-Em outro:
-```bash
-echo "ERROR: database timeout" | sudo tee -a /var/log/syslog
-```
-Simule rotação:
-```bash
-sudo mv /var/log/syslog /var/log/syslog.1
-sudo touch /var/log/syslog
-sudo systemctl restart rsyslog || true
-```
-## 🛡️ Notas de segurança
-- Para webhooks, mantenha a URL em segredos (env/CI) e evite expor em logs ou commits.
-- Limite de bundle para evitar payloads muito grandes.
+## 📜 Flags disponíveis
+
+| Flag             | Descrição                               |
+| ---------------- | --------------------------------------- |
+| `-files`         | Arquivos de log (suporta glob)          |
+| `-pattern`       | Expressão regular para detecção         |
+| `-metrics-addr`  | Endereço para expor métricas Prometheus |
+| `-webhook`       | URL do Webhook Slack/Discord            |
+| `-channel`       | Canal/destino do alerta                 |
+| `-title`         | Título prefixo da notificação           |
+| `-poll`          | Intervalo de leitura dos logs           |
+| `-cooldown`      | Janela mínima entre alertas             |
+| `-bundle-window` | Janela para agrupar eventos             |
+| `-bundle-max`    | Máximo de eventos agrupados             |
+
 ---
-## 🗺️ Roadmap
-- Suporte a templates de payload por provedor (Slack blocks, Discord embeds).
-- Regras múltiplas (várias regex com ações distintas).
-- Inputs de múltiplos diretórios recursivos.
-- Persistência de offset (checkpoint) opcional.
+
+## 🐞 Troubleshooting
+- Logs não encontrados: verifique o caminho usado em `-files`.
+- Webhook não envia: valide a URL e permissões no destino.
+- Sem métricas no Prometheus: confirme se `/metrics` está exposto e o ServiceMonitor configurado.
+
+---
+
+📄 Licença
+Este projeto está sob a licença MIT. Veja o arquivo LICENSE para mais detalhes.
