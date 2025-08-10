@@ -28,7 +28,7 @@ Ele é ideal para:
 
 ```bash
 curl "http://localhost:8080/check?repo=owner/repo&provider=github"
-
+```
 
 ### Resposta:
 
