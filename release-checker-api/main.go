@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"encoding/json"
+	"encoding/xml"
 	"flag"
 	"fmt"
 	"net"
@@ -39,11 +40,11 @@ type Out struct {
 	Error        string    `json:"error,omitempty"`
 	Rate         *RateInfo `json:"rate,omitempty"`
 
-	// Passo 6 — comparação de versão
+	// Comparação de versão
 	Current       string `json:"current,omitempty"`
 	CurrentNorm   string `json:"current_norm,omitempty"`
 	LatestNorm    string `json:"latest_norm,omitempty"`
-	Outdated      *bool  `json:"outdated,omitempty"` // ponteiro pra omitir quando vazio
+	Outdated      *bool  `json:"outdated,omitempty"`
 	CompareReason string `json:"compare_reason,omitempty"`
 }
 
@@ -109,14 +110,13 @@ func humanReset(ts int64) string {
 	return time.Unix(ts, 0).Format(time.RFC3339)
 }
 
-// ----- SemVer (simplificado e robusto o suficiente) -----
-// Normaliza: remove prefixo "v"/"V", corta build metadata (+) e separa pre-release (-)
+// ----- SemVer (simples/robusto) -----
 type semver struct {
 	Major int
 	Minor int
 	Patch int
-	Pre   string // pré-release inteiro (ex.: "rc.1"). Sem parsing fino; só ordenação básica.
-	Raw   string // para debug
+	Pre   string
+	Raw   string
 }
 
 func normalizeVer(s string) string {
@@ -127,7 +127,6 @@ func normalizeVer(s string) string {
 	if s[0] == 'v' || s[0] == 'V' {
 		s = s[1:]
 	}
-	// remove build metadata
 	if i := strings.IndexByte(s, '+'); i >= 0 {
 		s = s[:i]
 	}
@@ -137,14 +136,13 @@ func normalizeVer(s string) string {
 func parseSemver(s string) (semver, error) {
 	raw := s
 	s = normalizeVer(s)
-	// separa pre-release
 	pre := ""
 	if i := strings.IndexByte(s, '-'); i >= 0 {
+		pre = s[:i+0]
 		pre = s[i+1:]
 		s = s[:i]
 	}
 	parts := strings.Split(s, ".")
-	// Padding para até 3 partes
 	for len(parts) < 3 {
 		parts = append(parts, "0")
 	}
@@ -172,8 +170,6 @@ func parseSemver(s string) (semver, error) {
 	return semver{Major: maj, Minor: min, Patch: pat, Pre: pre, Raw: raw}, nil
 }
 
-// compareSemver: -1 se a<b, 0 se a==b, 1 se a>b
-// Regras: major/minor/patch numérico; sem pre-release > com pre-release; se ambos pre, compara lexicograficamente.
 func compareSemver(a, b semver) int {
 	if a.Major != b.Major {
 		if a.Major < b.Major {
@@ -202,7 +198,6 @@ func compareSemver(a, b semver) int {
 	if a.Pre == b.Pre {
 		return 0
 	}
-	// Fallback simples: ordem lexicográfica do pre-release
 	if a.Pre < b.Pre {
 		return -1
 	}
@@ -211,8 +206,6 @@ func compareSemver(a, b semver) int {
 
 // ---- HTTP / GitHub ----
 
-// fetchLatest executa UMA tentativa, com timeout e (opcional) token.
-// Retorna release, status HTTP, duração em ms, rate info e erro.
 func fetchLatest(owner, repo string, timeout time.Duration, token string) (Release, int, int64, RateInfo, error) {
 	var zero Release
 	var zr RateInfo
@@ -244,7 +237,6 @@ func fetchLatest(owner, repo string, timeout time.Duration, token string) (Relea
 
 	switch resp.StatusCode {
 	case http.StatusOK:
-		// segue
 	case http.StatusNotFound:
 		return zero, resp.StatusCode, elapsed, rate, fmt.Errorf("not found (ou sem releases)")
 	case http.StatusForbidden:
@@ -262,7 +254,6 @@ func fetchLatest(owner, repo string, timeout time.Duration, token string) (Relea
 	return rel, resp.StatusCode, elapsed, rate, nil
 }
 
-// fetchWithRetries aplica backoff exponencial: base * 2^attempt
 func fetchWithRetries(owner, repo string, timeout time.Duration, token string, retries int, backoffBase time.Duration) (Release, int, int64, RateInfo, error) {
 	var lastRel Release
 	var lastStatus int
@@ -286,6 +277,80 @@ func fetchWithRetries(owner, repo string, timeout time.Duration, token string, r
 	return lastRel, lastStatus, lastDur, lastRate, lastErr
 }
 
+// ---- current-map ----
+
+func parseCurrentMap(s string) map[string]string {
+	m := map[string]string{}
+	if strings.TrimSpace(s) == "" {
+		return m
+	}
+	entries := strings.Split(s, ",")
+	for _, e := range entries {
+		e = strings.TrimSpace(e)
+		if e == "" {
+			continue
+		}
+		kv := strings.SplitN(e, "=", 2)
+		if len(kv) != 2 {
+			continue
+		}
+		repo := strings.TrimSpace(kv[0])
+		ver := strings.TrimSpace(kv[1])
+		if repo != "" && ver != "" {
+			m[repo] = ver
+		}
+	}
+	return m
+}
+
+// ---- JUnit XML ----
+
+type junitTestSuite struct {
+	XMLName    xml.Name       `xml:"testsuite"`
+	Name       string         `xml:"name,attr"`
+	Tests      int            `xml:"tests,attr"`
+	Failures   int            `xml:"failures,attr"`
+	Time       string         `xml:"time,attr,omitempty"`
+	TestCases  []junitCase    `xml:"testcase"`
+	Properties *junitProps    `xml:"properties,omitempty"`
+}
+
+type junitProps struct {
+	Properties []junitProp `xml:"property"`
+}
+type junitProp struct {
+	Name  string `xml:"name,attr"`
+	Value string `xml:"value,attr"`
+}
+
+type junitCase struct {
+	Name      string        `xml:"name,attr"`
+	Classname string        `xml:"classname,attr,omitempty"`
+	Time      string        `xml:"time,attr,omitempty"`
+	Failure   *junitFailure `xml:"failure,omitempty"`
+	SystemOut *cdataWrap    `xml:"system-out,omitempty"`
+}
+type junitFailure struct {
+	Message string `xml:"message,attr"`
+	Type    string `xml:"type,attr"`
+	Body    string `xml:",chardata"`
+}
+type cdataWrap struct {
+	Body string `xml:",cdata"`
+}
+
+func writeJUnit(path string, suite junitTestSuite) error {
+	f, err := os.Create(path)
+	if err != nil {
+		return err
+	}
+	defer f.Close()
+	enc := xml.NewEncoder(f)
+	enc.Indent("", "  ")
+	_, _ = f.WriteString(xml.Header)
+	return enc.Encode(suite)
+}
+
 // ---- main ----
 
 func main() {
@@ -302,10 +367,15 @@ func main() {
 	showRate := flag.Bool("ratelimit", false, "Exibe informações de rate limit (X-RateLimit-*)")
 
 	// Comparação de versão
-	current := flag.String("current", "", "Versão instalada/local (ex.: v1.2.3). Aplica a todos os repositórios.")
-	outdatedExit := flag.Int("outdated-exitcode", 3, "Exit code para quando estiver desatualizado (default 3)")
+	current := flag.String("current", "", "Versão instalada/local (ex.: v1.2.3). Usada como padrão.")
+	outdatedExit := flag.Int("outdated-exitcode", 3, "Exit code quando desatualizado (default 3)")
+
+	currentMapFlag := flag.String("current-map", "", "Versões por repo: owner/repo=vX.Y.Z,... (tem precedência sobre -current)")
+	junitPath := flag.String("junit", "", "Grava relatório JUnit XML no caminho informado")
+	summaryJSONPath := flag.String("summary-json", "", "Grava o resumo final em JSON no caminho informado")
 	flag.Parse()
 
+	// Lista de repositórios
 	var list []string
 	if *repos != "" {
 		for _, r := range strings.Split(*repos, ",") {
@@ -331,6 +401,9 @@ func main() {
 	if token == "" {
 		token = os.Getenv("GITHUB_TOKEN")
 	}
+
+	// Parse do current-map
+	curMap := parseCurrentMap(*currentMapFlag)
 
 	type result struct {
 		out Out
@@ -381,6 +454,7 @@ func main() {
 				},
 				ok: err == nil,
 			}
+			// rate info opcional
 			if *showRate {
 				r.out.Rate = &rate
 			}
@@ -390,27 +464,28 @@ func main() {
 				return
 			}
 
-			// Comparação de versão (se -current foi fornecido)
-			if *current != "" {
-				curSV, errCur := parseSemver(*current)
+			// current por repo (map) tem precedência, depois -current global
+			cur := curMap[full]
+			if cur == "" {
+				cur = *current
+			}
+			if cur != "" {
+				curSV, errCur := parseSemver(cur)
 				latSV, errLat := parseSemver(rel.TagName)
 
-				r.out.Current = *current
+				r.out.Current = cur
 				if errCur == nil {
-					r.out.CurrentNorm = normalizeVer(*current)
+					r.out.CurrentNorm = normalizeVer(cur)
 				}
 				if errLat == nil {
 					r.out.LatestNorm = normalizeVer(rel.TagName)
 				}
 
 				if errCur != nil || errLat != nil {
-					// Não conseguimos comparar formalmente
 					r.out.CompareReason = "semver inválido (current ou latest)"
 				} else {
-					cmp := compareSemver(curSV, latSV)
-					switch {
+					switch cmp := compareSemver(curSV, latSV); {
 					case cmp < 0:
-						// current < latest => desatualizado
 						od := true
 						r.out.Outdated = &od
 						r.out.CompareReason = "current < latest"
@@ -418,7 +493,7 @@ func main() {
 						od := false
 						r.out.Outdated = &od
 						r.out.CompareReason = "current == latest"
-					case cmp > 0:
+					default:
 						od := false
 						r.out.Outdated = &od
 						r.out.CompareReason = "current > latest"
@@ -436,19 +511,13 @@ func main() {
 	}()
 
 	exitCode := 0
+	// Coletamos para também conseguir escrever JUnit ao final
+	var collected []result
 
 	for r := range results {
-		// contador de sucesso/falha
-		if r.ok {
-			okCount++
-		} else {
-			failCount++
-			failed = append(failed, r.out.Repo)
-			exitCode = 1
-		}
+		collected = append(collected, r)
 
-		// saída
-		if asJSON := flag.Lookup("json").Value.String(); asJSON == "true" {
+		if *asJSON {
 			_ = json.NewEncoder(os.Stdout).Encode(r.out)
 		} else {
 			if r.ok {
@@ -467,8 +536,7 @@ func main() {
 						dash(r.out.Current), dash(r.out.Tag), odStr, dash(r.out.CompareReason))
 				}
 			} else {
-				fmt.Printf("[%s] FAIL  err=%s  ms=%d\n",
-					r.out.Repo, r.out.Error, r.out.DurationMS)
+				fmt.Printf("[%s] FAIL  err=%s  ms=%d\n", r.out.Repo, r.out.Error, r.out.DurationMS)
 			}
 			if r.out.Rate != nil {
 				fmt.Printf("   rate: limit=%d remaining=%d reset=%s\n",
@@ -476,16 +544,23 @@ func main() {
 			}
 		}
 
-		// marca outdated
+		if r.ok {
+			okCount++
+		} else {
+			failCount++
+			failed = append(failed, r.out.Repo)
+			exitCode = 1
+		}
 		if r.ok && r.out.Outdated != nil && *r.out.Outdated {
 			outdatedCount++
 			outdatedRepos = append(outdatedRepos, r.out.Repo)
 		}
 	}
 
-	// resumo
-	if flag.Lookup("summary").Value.String() == "true" {
-		if flag.Lookup("json").Value.String() == "true" {
+	// Resumo final
+	total := okCount + failCount
+	if *summary {
+		if *asJSON {
 			sum := struct {
 				Ok       int      `json:"ok"`
 				Fail     int      `json:"fail"`
@@ -494,13 +569,17 @@ func main() {
 				Failed   []string `json:"failed_repos,omitempty"`
 				Oldies   []string `json:"outdated_repos,omitempty"`
 			}{
-				Ok: okCount, Fail: failCount, Outdated: outdatedCount, Total: okCount + failCount,
+				Ok: okCount, Fail: failCount, Outdated: outdatedCount, Total: total,
 				Failed: failed, Oldies: outdatedRepos,
 			}
 			_ = json.NewEncoder(os.Stdout).Encode(sum)
+
+			// PASSO 7: gravar summary JSON em arquivo (opcional)
+			if *summaryJSONPath != "" {
+				_ = writeJSONFile(*summaryJSONPath, sum)
+			}
 		} else {
-			fmt.Printf("\nResumo: OK=%d FAIL=%d OUTDATED=%d TOTAL=%d\n",
-				okCount, failCount, outdatedCount, okCount+failCount)
+			fmt.Printf("\nResumo: OK=%d FAIL=%d OUTDATED=%d TOTAL=%d\n", okCount, failCount, outdatedCount, total)
 			if failCount > 0 {
 				fmt.Printf("Falharam: %s\n", strings.Join(failed, ", "))
 			}
@@ -510,9 +589,60 @@ func main() {
 		}
 	}
 
-	// exit code para desatualizado (se não houve falhas “hard”)
+	// PASSO 7: JUnit XML (opcional)
+	if *junitPath != "" {
+		suite := junitTestSuite{
+			Name:     "github-latest-release",
+			Tests:    total,
+			Failures: 0, // vamos somar abaixo
+			Properties: &junitProps{Properties: []junitProp{
+				{Name: "generated_at", Value: time.Now().Format(time.RFC3339)},
+			}},
+		}
+		for _, r := range collected {
+			tc := junitCase{
+				Name:      r.out.Repo,
+				Classname: "release.check",
+				Time:      fmt.Sprintf("%.3f", float64(r.out.DurationMS)/1000.0),
+				SystemOut: &cdataWrap{Body: fmt.Sprintf("tag=%s name=%s url=%s", dash(r.out.Tag), dash(r.out.Name), r.out.URL)},
+			}
+			// Consideramos "falha" no JUnit tanto erro “hard” quanto “outdated”
+			if !r.ok {
+				suite.Failures++
+				tc.Failure = &junitFailure{
+					Message: "API error",
+					Type:    "api",
+					Body:    r.out.Error,
+				}
+			} else if r.out.Outdated != nil && *r.out.Outdated {
+				suite.Failures++
+				tc.Failure = &junitFailure{
+					Message: "Outdated",
+					Type:    "version",
+					Body:    fmt.Sprintf("current=%s latest=%s reason=%s", dash(r.out.Current), dash(r.out.Tag), dash(r.out.CompareReason)),
+				}
+			}
+			suite.TestCases = append(suite.TestCases, tc)
+		}
+		if err := writeJUnit(*junitPath, suite); err != nil {
+			fmt.Fprintf(os.Stderr, "erro ao escrever JUnit: %v\n", err)
+			// não altera exit code principal
+		}
+	}
+
+	// Exit code para desatualizado (se não houve falhas hard)
 	if exitCode == 0 && outdatedCount > 0 {
 		exitCode = *outdatedExit
 	}
 	os.Exit(exitCode)
+}
+
+// ---- helpers de arquivo ----
+
+func writeJSONFile(path string, v any) error {
+	data, err := json.MarshalIndent(v, "", "  ")
+	if err != nil {
+		return err
+	}
+	return os.WriteFile(path, data, 0o644)
 }
