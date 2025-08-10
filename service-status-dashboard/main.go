@@ -406,7 +406,7 @@ func main() {
 		ch := hub.subscribe()
 		defer hub.unsubscribe(ch)
 
-		// opcional: enviar o estado atual assim que conectar
+		// enviar o estado atual assim que conectar
 		if p, ok := store.Get(); ok {
 			if b, err := json.Marshal(p); err == nil {
 				fmt.Fprintf(w, "data: %s\n\n", b)
