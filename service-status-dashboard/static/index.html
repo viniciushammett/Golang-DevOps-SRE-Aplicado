@@ -1,0 +1,129 @@
+<!doctype html>
+<html lang="pt-br">
+  <head>
+    <meta charset="utf-8" />
+    <title>Service Status Dashboard</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <style>
+      :root {
+        --bg: #0f172a;
+        --card: #111827;
+        --ok: #16a34a;
+        --bad: #ef4444;
+        --text: #e5e7eb;
+        --muted: #94a3b8;
+        --chip: #1f2937;
+        --chip-border: #334155;
+      }
+      * { box-sizing: border-box; }
+      body {
+        margin: 0; font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Ubuntu, Cantarell, Noto Sans, sans-serif;
+        background: radial-gradient(1200px 500px at 50% -10%, #1f2937 0%, var(--bg) 60%);
+        color: var(--text);
+      }
+      header {
+        padding: 24px;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+      }
+      h1 { margin: 0; font-size: 20px; letter-spacing: .5px; }
+      .muted { color: var(--muted); font-size: 14px; }
+      .container { padding: 16px 24px 32px; max-width: 1100px; margin: 0 auto; }
+      .grid {
+        display: grid; gap: 16px;
+        grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+      }
+      .card {
+        background: linear-gradient(180deg, #111827, #0b1220);
+        border: 1px solid #1f2937;
+        border-radius: 16px;
+        padding: 16px;
+        box-shadow: 0 10px 30px rgba(2,6,23,0.5), inset 0 1px 0 rgba(255,255,255,0.02);
+      }
+      .row { display: flex; justify-content: space-between; gap: 8px; align-items: baseline; }
+      .name { font-weight: 600; }
+      .url { color: var(--muted); font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+      .status {
+        font-size: 12px; padding: 4px 10px; border-radius: 999px;
+        border: 1px solid var(--chip-border); background: var(--chip);
+      }
+      .status.ok { color: #bbf7d0; border-color: #14532d; background: #052e16; }
+      .status.bad { color: #fecaca; border-color: #7f1d1d; background: #2a0c0c; }
+      .meta { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 10px; }
+      .chip {
+        font-size: 12px; padding: 4px 8px; border-radius: 8px;
+        border: 1px solid var(--chip-border); background: var(--chip); color: var(--muted);
+      }
+      footer { text-align: center; padding: 24px; color: var(--muted); font-size: 12px; }
+      .last-update { font-size: 12px; color: var(--muted); }
+      .title-right { font-size: 12px; color: var(--muted); }
+    </style>
+  </head>
+  <body>
+    <header>
+      <h1>Service Status Dashboard</h1>
+      <div class="title-right">
+        Atualiza a cada <span id="interval">5s</span>
+      </div>
+    </header>
+
+    <div class="container">
+      <div id="grid" class="grid"></div>
+      <p class="last-update" id="lastUpdate"></p>
+    </div>
+
+    <footer>Feito com Go 🐹</footer>
+
+    <script>
+      const POLL_MS = 5000; // 5s
+      document.getElementById('interval').textContent = (POLL_MS/1000)+'s';
+
+      async function fetchStatus() {
+        try {
+          const res = await fetch('/status', { cache: 'no-store' });
+          if (!res.ok) throw new Error('HTTP '+res.status);
+          const data = await res.json();
+          render(data);
+          document.getElementById('lastUpdate').textContent =
+            'Última atualização: ' + new Date().toLocaleString();
+        } catch (err) {
+          console.error('Falha ao obter /status:', err);
+        }
+      }
+
+      function render(items) {
+        const grid = document.getElementById('grid');
+        grid.innerHTML = '';
+        items.forEach(svc => {
+          const card = document.createElement('div');
+          card.className = 'card';
+          card.innerHTML = `
+            <div class="row">
+              <div class="name">${escapeHtml(svc.name)}</div>
+              <div class="status ${svc.up ? 'ok' : 'bad'}">${svc.up ? 'UP' : 'DOWN'}</div>
+            </div>
+            <div class="url">${escapeHtml(svc.url)}</div>
+            <div class="meta">
+              <div class="chip">HTTP: ${svc.status_code ?? '-'}</div>
+              <div class="chip">latência: ${svc.latency_ms ?? '-'}ms</div>
+              <div class="chip">checado: ${escapeHtml(svc.checked_at ?? '-')}</div>
+            </div>
+          `;
+          grid.appendChild(card);
+        });
+      }
+
+      function escapeHtml(s) {
+        if (s == null) return '';
+        return s.replace(/[&<>"']/g, c => ({
+          '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
+        }[c]));
+      }
+
+      // primeira carga + polling
+      fetchStatus();
+      setInterval(fetchStatus, POLL_MS);
+    </script>
+  </body>
+</html>
