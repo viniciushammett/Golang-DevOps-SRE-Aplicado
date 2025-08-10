@@ -27,8 +27,8 @@ Cada projeto aqui é **100% funcional**, com código aberto, documentação e ex
 
 | Projeto | Descrição | Recursos Principais | Link |
 |---------|-----------|--------------------|------|
-| 🩺 **Healthchecker** | CLI para verificar múltiplas URLs com concorrência. | Status HTTP, tempo de resposta, saída JSON, retries. | [📄 Leia mais](./healthchecker/README.md) |
-| 💽 **Disk Usage Monitor** | Mostra uso de disco de um diretório. | Total, usado, livre, erros tratados. | [📄 Leia mais](./disk-usage-monitor/README.md) |
+| 🩺 **Healthchecker** | CLI para verificar múltiplas URLs com concorrência. | Status HTTP, tempo de resposta, saída JSON, retries. | [📄 Leia mais](./go-healthcheck/README.md) |
+| 💽 **Disk Usage Monitor** | Mostra uso de disco de um diretório. | Total, usado, livre, erros tratados. | [📄 Leia mais](./go-diskmonitor/README.md) |
 | 📊 **Prometheus Healthcheck Exporter** | Exporter que expõe métricas HTTP. | UP/DOWN, latência, status code, deploy em Kubernetes. | [📄 Leia mais](./prometheus-healthcheck-exporter/README.md) |
 | 🔍 **Release Checker API** | API para buscar última release de um repositório. | JSON output, integração CI/CD. | [📄 Leia mais](./release-checker-api/README.md) |
 
