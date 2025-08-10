@@ -40,7 +40,7 @@ type ServiceStatus struct {
 
 type StatusPayload struct {
 	Services    []ServiceStatus `json:"services"`
-	LastUpdated string          `json:"last_updated"` // ISO8601
+	LastUpdated string          `json:"last_updated"`
 	IntervalSec int             `json:"interval_sec"`
 }
 
@@ -127,7 +127,7 @@ func newChecker(timeout time.Duration, concurrency int) *checker {
 		concurrency = 1
 	}
 	return &checker{
-		client: &http.Client{Timeout: timeout},
+		client:      &http.Client{Timeout: timeout},
 		concurrency: concurrency,
 	}
 }
@@ -207,53 +207,44 @@ func (s *statusStore) Get() (StatusPayload, bool) {
 	return s.payload, s.hasData
 }
 
-func runScheduler(ctx context.Context, c *checker, services []Service, interval time.Duration, store *statusStore) {
-	runOnce := func() {
-		timeout := c.client.Timeout
-		if timeout == 0 {
-			timeout = 3 * time.Second
-		}
-		ctxCheck, cancel := context.WithTimeout(ctx, timeout+1*time.Second)
-		defer cancel()
+//
+// ===================== SSE Hub =====================
+//
 
-		res := c.CheckAll(ctxCheck, services)
+type sseHub struct {
+	mu    sync.Mutex
+	subs  map[chan []byte]struct{} // set de canais inscritos
+}
 
-		// --- MÉTRICAS (agregação por rodada) ---
-		checksTotal.Inc()
-		lastRunTimestamp.SetToCurrentTime()
+func newSSEHub() *sseHub {
+	return &sseHub{subs: make(map[chan []byte]struct{})}
+}
 
-		for _, st := range res {
-			var upVal float64
-			if st.Up {
-				upVal = 1
-			}
-			serviceUp.WithLabelValues(st.Name, st.URL).Set(upVal)
-			statusCode := strconv.Itoa(st.StatusCode)
-			serviceStatusCode.WithLabelValues(st.Name, st.URL, statusCode).Inc()
-			serviceLatency.Observe(float64(st.LatencyMS))
-		}
-		servicesConfigured.Set(float64(len(services)))
-		// ---------------------------------------
+func (h *sseHub) subscribe() chan []byte {
+	ch := make(chan []byte, 8) // buffer pequeno
+	h.mu.Lock()
+	h.subs[ch] = struct{}{}
+	h.mu.Unlock()
+	return ch
+}
 
-		store.Set(StatusPayload{
-			Services:    res,
-			LastUpdated: time.Now().Format(time.RFC3339),
-			IntervalSec: int(interval.Seconds()),
-		})
+func (h *sseHub) unsubscribe(ch chan []byte) {
+	h.mu.Lock()
+	if _, ok := h.subs[ch]; ok {
+		delete(h.subs, ch)
+		close(ch)
 	}
+	h.mu.Unlock()
+}
 
-	// primeira rodada já
-	runOnce()
-
-	t := time.NewTicker(interval)
-	defer t.Stop()
-
-	for {
+func (h *sseHub) broadcast(msg []byte) {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	for ch := range h.subs {
 		select {
-		case <-ctx.Done():
-			return
-		case <-t.C:
-			runOnce()
+		case ch <- msg:
+		default:
+			// se o cliente estiver lento e o buffer encher, descartamos
 		}
 	}
 }
@@ -264,53 +255,91 @@ func runScheduler(ctx context.Context, c *checker, services []Service, interval 
 
 var (
 	serviceUp = prometheus.NewGaugeVec(
-		prometheus.GaugeOpts{
-			Name: "ssd_service_up",
-			Help: "1 se o serviço está UP na última checagem, 0 se DOWN.",
-		},
+		prometheus.GaugeOpts{Name: "ssd_service_up", Help: "1 se UP; 0 se DOWN."},
 		[]string{"service", "url"},
 	)
-
 	serviceStatusCode = prometheus.NewCounterVec(
-		prometheus.CounterOpts{
-			Name: "ssd_service_status_code_total",
-			Help: "Contador de códigos HTTP observados por serviço.",
-		},
+		prometheus.CounterOpts{Name: "ssd_service_status_code_total", Help: "Códigos HTTP observados."},
 		[]string{"service", "url", "code"},
 	)
-
 	serviceLatency = prometheus.NewHistogram(
 		prometheus.HistogramOpts{
 			Name:    "ssd_service_latency_ms",
-			Help:    "Histograma de latência em milissegundos.",
+			Help:    "Latência em ms.",
 			Buckets: []float64{10, 25, 50, 100, 200, 400, 800, 1600, 3200},
 		},
 	)
-
 	checksTotal = prometheus.NewCounter(
-		prometheus.CounterOpts{
-			Name: "ssd_checks_total",
-			Help: "Número de rodadas de checagem executadas.",
-		},
+		prometheus.CounterOpts{Name: "ssd_checks_total", Help: "Rodadas executadas."},
 	)
-
 	lastRunTimestamp = prometheus.NewGauge(
-		prometheus.GaugeOpts{
-			Name: "ssd_last_run_timestamp",
-			Help: "Timestamp (segundos desde epoch) da última rodada.",
-		},
+		prometheus.GaugeOpts{Name: "ssd_last_run_timestamp", Help: "Epoch da última rodada."},
 	)
-
 	servicesConfigured = prometheus.NewGauge(
-		prometheus.GaugeOpts{
-			Name: "ssd_services_configured",
-			Help: "Quantidade de serviços configurados.",
-		},
+		prometheus.GaugeOpts{Name: "ssd_services_configured", Help: "Qtde de serviços configurados."},
 	)
 )
 
 func init() {
 	prometheus.MustRegister(serviceUp, serviceStatusCode, serviceLatency, checksTotal, lastRunTimestamp, servicesConfigured)
+}
+
+//
+// ===================== Scheduler: agora faz broadcast SSE =====================
+//
+
+func runScheduler(ctx context.Context, c *checker, services []Service, interval time.Duration, store *statusStore, hub *sseHub) {
+	doRound := func() {
+		timeout := c.client.Timeout
+		if timeout == 0 {
+			timeout = 3 * time.Second
+		}
+		ctxCheck, cancel := context.WithTimeout(ctx, timeout+1*time.Second)
+		defer cancel()
+
+		res := c.CheckAll(ctxCheck, services)
+
+		// métricas
+		checksTotal.Inc()
+		lastRunTimestamp.SetToCurrentTime()
+		for _, st := range res {
+			var upVal float64
+			if st.Up {
+				upVal = 1
+			}
+			serviceUp.WithLabelValues(st.Name, st.URL).Set(upVal)
+			serviceStatusCode.WithLabelValues(st.Name, st.URL, strconv.Itoa(st.StatusCode)).Inc()
+			serviceLatency.Observe(float64(st.LatencyMS))
+		}
+		servicesConfigured.Set(float64(len(services)))
+
+		// cache
+		payload := StatusPayload{
+			Services:    res,
+			LastUpdated: time.Now().Format(time.RFC3339),
+			IntervalSec: int(interval.Seconds()),
+		}
+		store.Set(payload)
+
+		// broadcast SSE (enviamos o JSON do payload)
+		b, _ := json.Marshal(payload)
+		hub.broadcast(b)
+	}
+
+	// primeira rodada
+	doRound()
+
+	t := time.NewTicker(interval)
+	defer t.Stop()
+
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-t.C:
+			doRound()
+		}
+	}
 }
 
 //
@@ -327,19 +356,20 @@ func main() {
 	chk := newChecker(*flagTimeout, *flagConcurrency)
 
 	var store statusStore
+	hub := newSSEHub() // PASSO 5
 
 	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt)
 	defer cancel()
 
-	// scheduler em background
-	go runScheduler(ctx, chk, services, *flagInterval, &store)
+	// scheduler em background (com broadcast SSE a cada rodada)
+	go runScheduler(ctx, chk, services, *flagInterval, &store, hub)
 
 	mux := http.NewServeMux()
 
-	// frontend
+	// index.html e assets estáticos
 	mux.Handle("/", http.FileServer(http.Dir("static")))
 
-	// status (serve cache)
+	// /status serve o cache atual (fallback para clientes sem SSE)
 	mux.HandleFunc("/status", func(w http.ResponseWriter, r *http.Request) {
 		p, ok := store.Get()
 		if !ok {
@@ -351,7 +381,7 @@ func main() {
 		_ = json.NewEncoder(w).Encode(p)
 	})
 
-	// healthz
+	// healthcheck simples
 	mux.HandleFunc("/healthz", func(w http.ResponseWriter, r *http.Request) {
 		if _, ok := store.Get(); ok {
 			w.WriteHeader(http.StatusOK)
@@ -362,8 +392,45 @@ func main() {
 		w.Write([]byte("warming up"))
 	})
 
-	// metrics (Prometheus)
+	// /metrics Prometheus
 	mux.Handle("/metrics", promhttp.Handler())
+
+	// /events (SSE)
+	mux.HandleFunc("/events", func(w http.ResponseWriter, r *http.Request) {
+		// headers de SSE
+		w.Header().Set("Content-Type", "text/event-stream")
+		w.Header().Set("Cache-Control", "no-cache")
+		w.Header().Set("Connection", "keep-alive")
+
+		// inscrição
+		ch := hub.subscribe()
+		defer hub.unsubscribe(ch)
+
+		// opcional: enviar o estado atual assim que conectar
+		if p, ok := store.Get(); ok {
+			if b, err := json.Marshal(p); err == nil {
+				fmt.Fprintf(w, "data: %s\n\n", b)
+				if f, ok := w.(http.Flusher); ok {
+					f.Flush()
+				}
+			}
+		}
+
+		notify := r.Context().Done()
+		for {
+			select {
+			case <-notify:
+				return
+			case msg := <-ch:
+				// formato SSE: "data: <json>\n\n"
+				fmt.Fprintf(w, "data: %s\n\n", msg)
+				// flush pra enviar sem buffer
+				if f, ok := w.(http.Flusher); ok {
+					f.Flush()
+				}
+			}
+		}
+	})
 
 	srv := &http.Server{
 		Addr:              *flagAddr,
@@ -374,6 +441,7 @@ func main() {
 	go func() {
 		log.Printf("🌐 Dashboard em http://localhost%s | services=%d | interval=%s | timeout=%s | conc=%d",
 			*flagAddr, len(services), flagInterval.String(), flagTimeout.String(), *flagConcurrency)
+		log.Printf("🔊 SSE em /events | métricas em /metrics")
 		if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
 			log.Fatalf("erro no servidor: %v", err)
 		}
