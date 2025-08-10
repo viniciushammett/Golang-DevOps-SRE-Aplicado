@@ -589,7 +589,7 @@ func main() {
 		}
 	}
 
-	// PASSO 7: JUnit XML (opcional)
+	// JUnit XML
 	if *junitPath != "" {
 		suite := junitTestSuite{
 			Name:     "github-latest-release",
