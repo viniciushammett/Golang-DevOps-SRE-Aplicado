@@ -31,6 +31,7 @@ Cada projeto aqui é **100% funcional**, com código aberto, documentação e ex
 | 💽 **Disk Usage Monitor** | Mostra uso de disco de um diretório. | Total, usado, livre, erros tratados. | [📄 Leia mais](./go-diskmonitor/README.md) |
 | 📊 **Prometheus Healthcheck Exporter** | Exporter que expõe métricas HTTP. | UP/DOWN, latência, status code, deploy em Kubernetes. | [📄 Leia mais](./prometheus-healthcheck-exporter/README.md) |
 | 🔍 **Release Checker API** | API para buscar última release de um repositório. | JSON output, integração CI/CD. | [📄 Leia mais](./release-checker-api/README.md) |
+| 🧾 **logwatcher** | Tail de logs com regex, rotação, múltiplos arquivos, deduplicação/cooldown, métricas Prometheus e webhook. | Regex, fsnotify, glob múltiplo, Prometheus, webhook. | [📄 Leia mais](./logwatcher/README.md) |
 
 ---
 
