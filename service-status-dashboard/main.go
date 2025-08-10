@@ -10,22 +10,24 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/prometheus/client_golang/prometheus"
+	"github.com/prometheus/client_golang/prometheus/promhttp"
 )
 
 //
 // ===================== Modelos de dados =====================
 //
 
-// Entrada (config): serviços a monitorar
 type Service struct {
 	Name string `json:"name"`
 	URL  string `json:"url"`
 }
 
-// Saída (API /status): resultado da checagem
 type ServiceStatus struct {
 	Name       string `json:"name"`
 	URL        string `json:"url"`
@@ -36,7 +38,6 @@ type ServiceStatus struct {
 	Error      string `json:"error,omitempty"`
 }
 
-// Envelope servido pelo /status (cacheado)
 type StatusPayload struct {
 	Services    []ServiceStatus `json:"services"`
 	LastUpdated string          `json:"last_updated"` // ISO8601
@@ -60,10 +61,6 @@ var (
 // ===================== Config loader =====================
 //
 
-// Prioridade:
-// 1) -services
-// 2) -config (arquivo JSON)
-// 3) SSD_SERVICES (env) — mesmo formato do -services
 func loadServices() ([]Service, error) {
 	if s := strings.TrimSpace(*flagServices); s != "" {
 		return parseServicesInline(s)
@@ -192,9 +189,9 @@ func (c *checker) checkOne(ctx context.Context, svc Service) ServiceStatus {
 //
 
 type statusStore struct {
-	mu          sync.RWMutex
-	payload     StatusPayload
-	hasData     bool
+	mu      sync.RWMutex
+	payload StatusPayload
+	hasData bool
 }
 
 func (s *statusStore) Set(p StatusPayload) {
@@ -210,12 +207,8 @@ func (s *statusStore) Get() (StatusPayload, bool) {
 	return s.payload, s.hasData
 }
 
-// runScheduler executa checagens periódicas e grava no cache.
-// - roda 1x imediatamente (para preencher o cache na inicialização)
-// - depois repete a cada interval
 func runScheduler(ctx context.Context, c *checker, services []Service, interval time.Duration, store *statusStore) {
 	runOnce := func() {
-		// contexto com timeout total = timeout do checker + uma folga
 		timeout := c.client.Timeout
 		if timeout == 0 {
 			timeout = 3 * time.Second
@@ -224,6 +217,24 @@ func runScheduler(ctx context.Context, c *checker, services []Service, interval 
 		defer cancel()
 
 		res := c.CheckAll(ctxCheck, services)
+
+		// --- MÉTRICAS (agregação por rodada) ---
+		checksTotal.Inc()
+		lastRunTimestamp.SetToCurrentTime()
+
+		for _, st := range res {
+			var upVal float64
+			if st.Up {
+				upVal = 1
+			}
+			serviceUp.WithLabelValues(st.Name, st.URL).Set(upVal)
+			statusCode := strconv.Itoa(st.StatusCode)
+			serviceStatusCode.WithLabelValues(st.Name, st.URL, statusCode).Inc()
+			serviceLatency.Observe(float64(st.LatencyMS))
+		}
+		servicesConfigured.Set(float64(len(services)))
+		// ---------------------------------------
+
 		store.Set(StatusPayload{
 			Services:    res,
 			LastUpdated: time.Now().Format(time.RFC3339),
@@ -248,6 +259,61 @@ func runScheduler(ctx context.Context, c *checker, services []Service, interval 
 }
 
 //
+// ===================== Métricas Prometheus =====================
+//
+
+var (
+	serviceUp = prometheus.NewGaugeVec(
+		prometheus.GaugeOpts{
+			Name: "ssd_service_up",
+			Help: "1 se o serviço está UP na última checagem, 0 se DOWN.",
+		},
+		[]string{"service", "url"},
+	)
+
+	serviceStatusCode = prometheus.NewCounterVec(
+		prometheus.CounterOpts{
+			Name: "ssd_service_status_code_total",
+			Help: "Contador de códigos HTTP observados por serviço.",
+		},
+		[]string{"service", "url", "code"},
+	)
+
+	serviceLatency = prometheus.NewHistogram(
+		prometheus.HistogramOpts{
+			Name:    "ssd_service_latency_ms",
+			Help:    "Histograma de latência em milissegundos.",
+			Buckets: []float64{10, 25, 50, 100, 200, 400, 800, 1600, 3200},
+		},
+	)
+
+	checksTotal = prometheus.NewCounter(
+		prometheus.CounterOpts{
+			Name: "ssd_checks_total",
+			Help: "Número de rodadas de checagem executadas.",
+		},
+	)
+
+	lastRunTimestamp = prometheus.NewGauge(
+		prometheus.GaugeOpts{
+			Name: "ssd_last_run_timestamp",
+			Help: "Timestamp (segundos desde epoch) da última rodada.",
+		},
+	)
+
+	servicesConfigured = prometheus.NewGauge(
+		prometheus.GaugeOpts{
+			Name: "ssd_services_configured",
+			Help: "Quantidade de serviços configurados.",
+		},
+	)
+)
+
+func init() {
+	prometheus.MustRegister(serviceUp, serviceStatusCode, serviceLatency, checksTotal, lastRunTimestamp, servicesConfigured)
+}
+
+//
 // ===================== HTTP server =====================
 //
 
@@ -260,40 +326,33 @@ func main() {
 	}
 	chk := newChecker(*flagTimeout, *flagConcurrency)
 
-	// cache em memória
 	var store statusStore
 
-	// contexto para encerramento gracioso
 	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt)
 	defer cancel()
 
-	// inicia o scheduler em background
+	// scheduler em background
 	go runScheduler(ctx, chk, services, *flagInterval, &store)
 
-	// mux HTTP
 	mux := http.NewServeMux()
 
 	// frontend
 	mux.Handle("/", http.FileServer(http.Dir("static")))
 
-	// status: serve SOMENTE o cache (rápido)
+	// status (serve cache)
 	mux.HandleFunc("/status", func(w http.ResponseWriter, r *http.Request) {
 		p, ok := store.Get()
 		if !ok {
-			// ainda não carregou a primeira rodada
 			w.WriteHeader(http.StatusServiceUnavailable)
-			_ = json.NewEncoder(w).Encode(map[string]any{
-				"error": "status ainda não disponível",
-			})
+			_ = json.NewEncoder(w).Encode(map[string]any{"error": "status ainda não disponível"})
 			return
 		}
 		w.Header().Set("Content-Type", "application/json")
 		_ = json.NewEncoder(w).Encode(p)
 	})
 
-	// healthz simples
+	// healthz
 	mux.HandleFunc("/healthz", func(w http.ResponseWriter, r *http.Request) {
-		// OK se já temos pelo menos uma rodada no cache
 		if _, ok := store.Get(); ok {
 			w.WriteHeader(http.StatusOK)
 			w.Write([]byte("ok"))
@@ -303,22 +362,23 @@ func main() {
 		w.Write([]byte("warming up"))
 	})
 
+	// metrics (Prometheus)
+	mux.Handle("/metrics", promhttp.Handler())
+
 	srv := &http.Server{
 		Addr:              *flagAddr,
 		Handler:           logMiddleware(mux),
 		ReadHeaderTimeout: 5 * time.Second,
 	}
 
-	// sobe servidor
 	go func() {
-		log.Printf("🌐 Dashboard em http://localhost%s | serviços=%d | interval=%s | timeout=%s | conc=%d",
+		log.Printf("🌐 Dashboard em http://localhost%s | services=%d | interval=%s | timeout=%s | conc=%d",
 			*flagAddr, len(services), flagInterval.String(), flagTimeout.String(), *flagConcurrency)
 		if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
 			log.Fatalf("erro no servidor: %v", err)
 		}
 	}()
 
-	// espera Ctrl+C
 	<-ctx.Done()
 
 	log.Println("⏹️  Encerrando servidor...")
