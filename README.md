@@ -6,7 +6,7 @@
   
   <!-- Badges -->
   <p>
-    <a href="https://go.dev/"><img src="https://img.shields.io/badge/Go-1.22+-blue.svg?style=for-the-badge&logo=go" alt="Go Version"></a>
+    <a href="https://go.dev/"><img src="https://img.shields.io/badge/Go-1.24+-blue.svg?style=for-the-badge&logo=go" alt="Go Version"></a>
     <a href="https://github.com/viniciushammett/Golang-DevOps-SRE-Aplicado/stargazers"><img src="https://img.shields.io/github/stars/viniciushammett/Golang-DevOps-SRE-Aplicado?style=for-the-badge" alt="GitHub Stars"></a>
     <a href="https://github.com/viniciushammett/Golang-DevOps-SRE-Aplicado/issues"><img src="https://img.shields.io/github/issues/viniciushammett/Golang-DevOps-SRE-Aplicado?style=for-the-badge" alt="GitHub Issues"></a>
     <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-green.svg?style=for-the-badge" alt="MIT License"></a>
