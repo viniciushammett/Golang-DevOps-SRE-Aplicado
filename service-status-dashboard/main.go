@@ -15,7 +15,9 @@ import (
 	"time"
 )
 
-// ---- Modelos de dados ----
+//
+// ===================== Modelos de dados =====================
+//
 
 // Entrada (config): serviços a monitorar
 type Service struct {
@@ -34,65 +36,67 @@ type ServiceStatus struct {
 	Error      string `json:"error,omitempty"`
 }
 
-// ---- Flags ----
+// Envelope servido pelo /status (cacheado)
+type StatusPayload struct {
+	Services    []ServiceStatus `json:"services"`
+	LastUpdated string          `json:"last_updated"` // ISO8601
+	IntervalSec int             `json:"interval_sec"`
+}
+
+//
+// ===================== Flags =====================
+//
 
 var (
 	flagAddr        = flag.String("addr", ":8080", "Endereço do servidor HTTP (ex.: :8080)")
 	flagTimeout     = flag.Duration("timeout", 3*time.Second, "Timeout por checagem HTTP")
 	flagConcurrency = flag.Int("concurrency", 8, "Máximo de checagens simultâneas")
-	flagConfig      = flag.String("config", "", "Caminho de um arquivo JSON com serviços (ex.: services.json)")
-	flagServices    = flag.String("services", "", "Lista inline de serviços: Nome1=url1,Nome2=url2 (tem prioridade sobre -config)")
+	flagInterval    = flag.Duration("interval", 10*time.Second, "Intervalo entre rodadas de checagem")
+	flagConfig      = flag.String("config", "", "Arquivo JSON com serviços (ex.: services.json)")
+	flagServices    = flag.String("services", "", "Lista inline: Nome1=url1,Nome2=url2 (maior prioridade)")
 )
 
-// ---- Carregamento de configuração ----
+//
+// ===================== Config loader =====================
+//
 
-// Ordem de prioridade para obter a lista de serviços:
+// Prioridade:
 // 1) -services
 // 2) -config (arquivo JSON)
-// 3) SSD_SERVICES (env) -- mesmo formato do -services
+// 3) SSD_SERVICES (env) — mesmo formato do -services
 func loadServices() ([]Service, error) {
-	if strings.TrimSpace(*flagServices) != "" {
-		svcs, err := parseServicesInline(*flagServices)
-		if err != nil {
-			return nil, fmt.Errorf("parse -services: %w", err)
-		}
-		return svcs, nil
+	if s := strings.TrimSpace(*flagServices); s != "" {
+		return parseServicesInline(s)
 	}
-	if strings.TrimSpace(*flagConfig) != "" {
-		return readServicesJSON(*flagConfig)
+	if c := strings.TrimSpace(*flagConfig); c != "" {
+		return readServicesJSON(c)
 	}
 	if env := strings.TrimSpace(os.Getenv("SSD_SERVICES")); env != "" {
-		svcs, err := parseServicesInline(env)
-		if err != nil {
-			return nil, fmt.Errorf("parse SSD_SERVICES: %w", err)
-		}
-		return svcs, nil
+		return parseServicesInline(env)
 	}
 	return nil, errors.New("nenhuma fonte de serviços encontrada (use -services, -config ou SSD_SERVICES)")
 }
 
-// Formato inline: "Nome A=https://a.com,Nome B=https://b.com"
 func parseServicesInline(s string) ([]Service, error) {
 	var out []Service
-	parts := strings.Split(s, ",")
-	for _, p := range parts {
-		p = strings.TrimSpace(p)
-		if p == "" {
+	for _, item := range strings.Split(s, ",") {
+		item = strings.TrimSpace(item)
+		if item == "" {
 			continue
 		}
-		kv := strings.SplitN(p, "=", 2)
+		kv := strings.SplitN(item, "=", 2)
 		if len(kv) != 2 {
-			return nil, fmt.Errorf("item inválido: %q (esperado Nome=url)", p)
+			return nil, fmt.Errorf("item inválido: %q (esperado Nome=url)", item)
 		}
 		name := strings.TrimSpace(kv[0])
 		url := strings.TrimSpace(kv[1])
 		if name == "" || url == "" {
-			return nil, fmt.Errorf("item inválido: %q (Nome e url não podem ser vazios)", p)
+			return nil, fmt.Errorf("item inválido: %q (Nome e url não podem ser vazios)", item)
 		}
 		out = append(out, Service{Name: name, URL: url})
 	}
 	if len(out) == 0 {
-		return nil, errors.New("nenhum serviço válido no inline")
+		return nil, errors.New("nenhum serviço válido")
 	}
 	return out, nil
 }
@@ -112,7 +116,9 @@ func readServicesJSON(path string) ([]Service, error) {
 	return svcs, nil
 }
 
-// ---- Checagens reais HTTP ----
+//
+// ===================== Checker =====================
+//
 
 type checker struct {
 	client      *http.Client
@@ -124,9 +130,7 @@ func newChecker(timeout time.Duration, concurrency int) *checker {
 		concurrency = 1
 	}
 	return &checker{
-		client: &http.Client{
-			Timeout: timeout,
-		},
+		client: &http.Client{Timeout: timeout},
 		concurrency: concurrency,
 	}
 }
@@ -138,12 +142,11 @@ func (c *checker) CheckAll(ctx context.Context, list []Service) []ServiceStatus 
 
 	for i, svc := range list {
 		wg.Add(1)
-		i, svc := i, svc // capturas
+		i, svc := i, svc
 		go func() {
 			defer wg.Done()
-			sem <- struct{}{}         // ocupa um slot
-			defer func() { <-sem }()  // libera
-
+			sem <- struct{}{}
+			defer func() { <-sem }()
 			out[i] = c.checkOne(ctx, svc)
 		}()
 	}
@@ -154,77 +157,150 @@ func (c *checker) CheckAll(ctx context.Context, list []Service) []ServiceStatus 
 func (c *checker) checkOne(ctx context.Context, svc Service) ServiceStatus {
 	start := time.Now()
 
-	// Contexto por requisição (herda cancelamentos do request principal)
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, svc.URL, nil)
 	if err != nil {
 		return ServiceStatus{
-			Name:       svc.Name,
-			URL:        svc.URL,
-			Up:         false,
-			StatusCode: 0,
-			LatencyMS:  time.Since(start).Milliseconds(),
-			CheckedAt:  time.Now().Format(time.RFC3339),
-			Error:      fmt.Sprintf("new request: %v", err),
+			Name: svc.Name, URL: svc.URL, Up: false, StatusCode: 0,
+			LatencyMS: time.Since(start).Milliseconds(),
+			CheckedAt: time.Now().Format(time.RFC3339),
+			Error:     fmt.Sprintf("new request: %v", err),
 		}
 	}
 	req.Header.Set("User-Agent", "service-status-dashboard/1.0")
 
 	resp, err := c.client.Do(req)
 	lat := time.Since(start).Milliseconds()
-
 	if err != nil {
 		return ServiceStatus{
-			Name:       svc.Name,
-			URL:        svc.URL,
-			Up:         false,
-			StatusCode: 0,
-			LatencyMS:  lat,
-			CheckedAt:  time.Now().Format(time.RFC3339),
-			Error:      err.Error(),
+			Name: svc.Name, URL: svc.URL, Up: false, StatusCode: 0,
+			LatencyMS: lat,
+			CheckedAt: time.Now().Format(time.RFC3339),
+			Error:     err.Error(),
 		}
 	}
 	defer resp.Body.Close()
 
 	up := resp.StatusCode >= 200 && resp.StatusCode < 400
-
 	return ServiceStatus{
-		Name:       svc.Name,
-		URL:        svc.URL,
-		Up:         up,
-		StatusCode: resp.StatusCode,
-		LatencyMS:  lat,
-		CheckedAt:  time.Now().Format(time.RFC3339),
+		Name: svc.Name, URL: svc.URL, Up: up, StatusCode: resp.StatusCode,
+		LatencyMS: lat, CheckedAt: time.Now().Format(time.RFC3339),
 	}
 }
 
-// ---- HTTP server & handlers ----
+//
+// ===================== Cache + Scheduler =====================
+//
+
+type statusStore struct {
+	mu          sync.RWMutex
+	payload     StatusPayload
+	hasData     bool
+}
+
+func (s *statusStore) Set(p StatusPayload) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.payload = p
+	s.hasData = true
+}
+
+func (s *statusStore) Get() (StatusPayload, bool) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return s.payload, s.hasData
+}
+
+// runScheduler executa checagens periódicas e grava no cache.
+// - roda 1x imediatamente (para preencher o cache na inicialização)
+// - depois repete a cada interval
+func runScheduler(ctx context.Context, c *checker, services []Service, interval time.Duration, store *statusStore) {
+	runOnce := func() {
+		// contexto com timeout total = timeout do checker + uma folga
+		timeout := c.client.Timeout
+		if timeout == 0 {
+			timeout = 3 * time.Second
+		}
+		ctxCheck, cancel := context.WithTimeout(ctx, timeout+1*time.Second)
+		defer cancel()
+
+		res := c.CheckAll(ctxCheck, services)
+		store.Set(StatusPayload{
+			Services:    res,
+			LastUpdated: time.Now().Format(time.RFC3339),
+			IntervalSec: int(interval.Seconds()),
+		})
+	}
+
+	// primeira rodada já
+	runOnce()
+
+	t := time.NewTicker(interval)
+	defer t.Stop()
+
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-t.C:
+			runOnce()
+		}
+	}
+}
+
+//
+// ===================== HTTP server =====================
+//
 
 func main() {
 	flag.Parse()
 
-	// Carrega lista de serviços (flags/env/arquivo)
 	services, err := loadServices()
 	if err != nil {
 		log.Fatalf("config: %v", err)
 	}
-
-	// Preparar checker com timeout e concorrência
 	chk := newChecker(*flagTimeout, *flagConcurrency)
 
+	// cache em memória
+	var store statusStore
+
+	// contexto para encerramento gracioso
+	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt)
+	defer cancel()
+
+	// inicia o scheduler em background
+	go runScheduler(ctx, chk, services, *flagInterval, &store)
+
+	// mux HTTP
 	mux := http.NewServeMux()
 
-	// Frontend estático (index.html)
+	// frontend
 	mux.Handle("/", http.FileServer(http.Dir("static")))
 
-	// Endpoint /status: executa checagens reais a cada request (simples e efetivo)
+	// status: serve SOMENTE o cache (rápido)
 	mux.HandleFunc("/status", func(w http.ResponseWriter, r *http.Request) {
-		ctx, cancel := context.WithTimeout(r.Context(), *flagTimeout+1*time.Second)
-		defer cancel()
-
-		results := chk.CheckAll(ctx, services)
-
+		p, ok := store.Get()
+		if !ok {
+			// ainda não carregou a primeira rodada
+			w.WriteHeader(http.StatusServiceUnavailable)
+			_ = json.NewEncoder(w).Encode(map[string]any{
+				"error": "status ainda não disponível",
+			})
+			return
+		}
 		w.Header().Set("Content-Type", "application/json")
-		_ = json.NewEncoder(w).Encode(results)
+		_ = json.NewEncoder(w).Encode(p)
+	})
+
+	// healthz simples
+	mux.HandleFunc("/healthz", func(w http.ResponseWriter, r *http.Request) {
+		// OK se já temos pelo menos uma rodada no cache
+		if _, ok := store.Get(); ok {
+			w.WriteHeader(http.StatusOK)
+			w.Write([]byte("ok"))
+			return
+		}
+		w.WriteHeader(http.StatusServiceUnavailable)
+		w.Write([]byte("warming up"))
 	})
 
 	srv := &http.Server{
@@ -233,24 +309,22 @@ func main() {
 		ReadHeaderTimeout: 5 * time.Second,
 	}
 
-	// Sobe o servidor
+	// sobe servidor
 	go func() {
-		log.Printf("🌐 Dashboard em http://localhost%s  (serviços: %d, timeout: %s, conc: %d)",
-			*flagAddr, len(services), flagTimeout.String(), *flagConcurrency)
+		log.Printf("🌐 Dashboard em http://localhost%s | serviços=%d | interval=%s | timeout=%s | conc=%d",
+			*flagAddr, len(services), flagInterval.String(), flagTimeout.String(), *flagConcurrency)
 		if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
 			log.Fatalf("erro no servidor: %v", err)
 		}
 	}()
 
-	// Encerramento (Ctrl+C)
-	quit := make(chan os.Signal, 1)
-	signal.Notify(quit, os.Interrupt)
-	<-quit
+	// espera Ctrl+C
+	<-ctx.Done()
 
 	log.Println("⏹️  Encerrando servidor...")
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
-	_ = srv.Shutdown(ctx)
+	shCtx, shCancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer shCancel()
+	_ = srv.Shutdown(shCtx)
 	log.Println("✅ Encerrado.")
 }
 
