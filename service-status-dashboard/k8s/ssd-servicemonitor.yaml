@@ -1,0 +1,15 @@
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: ssd
+  namespace: service-status
+  labels:
+    release: prometheus # ajuste ao label do seu Operator/Stack
+spec:
+  selector:
+    matchLabels:
+      app: ssd
+  endpoints:
+    - port: http
+      path: /metrics
+      interval: 30s

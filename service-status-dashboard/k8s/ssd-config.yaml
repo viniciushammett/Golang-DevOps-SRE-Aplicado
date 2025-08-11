@@ -1,0 +1,14 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: ssd-config
+  namespace: service-status
+data:
+  services.yaml: |
+    services:
+      - name: Example
+        url: https://example.com
+      - name: HttpBin (204)
+        url: https://httpbin.org/status/204
+      - name: HttpBin (500)
+        url: https://httpbin.org/status/500

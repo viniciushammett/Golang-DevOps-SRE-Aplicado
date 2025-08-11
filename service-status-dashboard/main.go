@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"gopkg.in/yaml.v3"
 	"strconv"
 	"strings"
 	"sync"
@@ -44,17 +45,22 @@ type StatusPayload struct {
 	IntervalSec int             `json:"interval_sec"`
 }
 
+type ServicesYAML struct {
+    Services []Service `yaml:"services"`
+}
+
 //
 // ===================== Flags =====================
 //
 
 var (
-	flagAddr        = flag.String("addr", ":8080", "Endereço do servidor HTTP (ex.: :8080)")
-	flagTimeout     = flag.Duration("timeout", 3*time.Second, "Timeout por checagem HTTP")
-	flagConcurrency = flag.Int("concurrency", 8, "Máximo de checagens simultâneas")
-	flagInterval    = flag.Duration("interval", 10*time.Second, "Intervalo entre rodadas de checagem")
-	flagConfig      = flag.String("config", "", "Arquivo JSON com serviços (ex.: services.json)")
-	flagServices    = flag.String("services", "", "Lista inline: Nome1=url1,Nome2=url2 (maior prioridade)")
+    flagAddr        = flag.String("addr", ":8080", "Endereço do servidor HTTP (ex.: :8080)")
+    flagTimeout     = flag.Duration("timeout", 3*time.Second, "Timeout por checagem HTTP")
+    flagConcurrency = flag.Int("concurrency", 8, "Máximo de checagens simultâneas")
+    flagInterval    = flag.Duration("interval", 10*time.Second, "Intervalo entre rodadas de checagem")
+    flagConfig      = flag.String("config", "", "Arquivo JSON com serviços (ex.: services.json)")
+    flagConfigYAML  = flag.String("config-yaml", "", "Arquivo YAML com serviços (ex.: services.yaml)")
+    flagServices    = flag.String("services", "", "Lista inline: Nome1=url1,Nome2=url2 (maior prioridade)")
 )
 
 //
@@ -112,6 +118,22 @@ func readServicesJSON(path string) ([]Service, error) {
 	}
 	return svcs, nil
 }
+
+func readServicesYAML(path string) ([]Service, error) {
+    b, err := os.ReadFile(path)
+    if err != nil {
+        return nil, err
+    }
+    var cfg ServicesYAML
+    if err := yaml.Unmarshal(b, &cfg); err != nil {
+        return nil, err
+    }
+    if len(cfg.Services) == 0 {
+        return nil, errors.New("arquivo YAML sem serviços")
+    }
+    return cfg.Services, nil
+}
+
 
 //
 // ===================== Checker =====================

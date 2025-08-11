@@ -1,0 +1,11 @@
+.git
+.gitignore
+bin/
+dist/
+build/
+*.log
+*.tmp
+*.swp
+.vscode/
+.idea/
+coverage*
