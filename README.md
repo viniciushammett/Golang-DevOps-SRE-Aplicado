@@ -59,3 +59,12 @@ go get <pacote>
 
 # Rodar o projeto
 go run .
+```
+##
+### 🤝 Contribuições
+Contribuições são bem-vindas!
+Sinta-se à vontade para sugerir melhorias, novas funcionalidades ou enviar PRs.
+##
+### 📜 Licença
+Este repositório é licenciado sob a MIT License.
+Consulte o arquivo LICENSE para mais informações.
