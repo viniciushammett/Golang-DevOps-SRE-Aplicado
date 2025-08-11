@@ -1,6 +1,6 @@
 <div align="center">
-  <h1>🚀 Golang DevOps/SRE Aplicado</h1>
-  <p>Repositório de estudos e projetos práticos em <strong>Golang</strong> voltados para <strong>DevOps</strong> e <strong>SRE</strong>, aplicando conceitos reais de monitoramento, observabilidade e automação.</p>
+  <h1>🚀 Golang para DevOps/SRE Aplicado </h1>
+  <p>Repositório de estudos e projetos práticos em <strong>Golang</strong> voltados para <strong>DevOps</strong> e <strong>SRE</strong>, aplicando conceitos reais de monitoramento, observabilidade e automação — com o diferencial de <strong>criar ferramentas próprias</strong>, mesmo diante de diversas soluções prontas no mercado.</p>
   
   <img src="https://res.cloudinary.com/practicaldev/image/fetch/s--fu79u6To--/c_limit%2Cf_auto%2Cfl_progressive%2Cq_auto%2Cw_880/https://github.com/kodelint/blog-assets/raw/main/images/02-learn-go.png" width="700"/>
   
@@ -16,10 +16,19 @@
 ---
 
 ## 📌 Sobre o Repositório
-Este repositório é um **laboratório prático** de projetos em Go, criados para aplicar conceitos de **DevOps** e **Site Reliability Engineering** no dia a dia.  
-Cada projeto aqui é **100% funcional**, com código aberto, documentação e exemplos de uso, podendo ser adaptado para ambientes reais.
 
-> 🛠 Objetivo: unir estudo prático + criação de ferramentas úteis para operação e monitoramento.
+Este repositório é um **laboratório prático** de projetos em Go, criados para aplicar conceitos de **DevOps** e **Site Reliability Engineering** no dia a dia.
+
+Diferente de apenas consumir ferramentas prontas, o objetivo aqui é **desenvolver soluções sob medida** para cenários críticos, garantindo:
+
+- **Controle total** sobre código e funcionalidades.
+- **Portabilidade** (um único binário, sem dependências externas).
+- **Performance** e baixo consumo de recursos.
+- **Segurança e auditabilidade** do código.
+
+Cada projeto é **100% funcional**, com código aberto, documentação e exemplos de uso, podendo ser adaptado para ambientes reais.
+
+> 🎯 Objetivo: unir estudo prático + criação de ferramentas úteis para operação, monitoramento e automação, mostrando capacidade de **engenharia de soluções** e não apenas de operação.
 
 ---
 
@@ -50,10 +59,3 @@ go get <pacote>
 
 # Rodar o projeto
 go run .
-```
-🤝 Contribuições
-Sinta-se à vontade para sugerir melhorias ou enviar PRs.
-
-📜 Licença
-Este repositório é licenciado sob a MIT License.
-Consulte o arquivo LICENSE para mais informações.
