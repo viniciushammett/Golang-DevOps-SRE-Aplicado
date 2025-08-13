@@ -43,6 +43,7 @@ Cada projeto é **100% funcional**, com código aberto, documentação e exemplo
 | 🧾 **logwatcher** | Tail de logs com regex, rotação, múltiplos arquivos, deduplicação/cooldown, métricas Prometheus e webhook. | Regex, fsnotify, glob múltiplo, Prometheus, webhook. | [📄 Leia mais](./logwatcher/README.md) |
 | 📡 **SRE-Monitor** | Monitor HTTP minimalista em Go com métricas Prometheus e healthcheck. | Configuração via YAML, logs estruturados, integração com Prometheus + Grafana (dashboard incluso). | [📄 Leia mais](./go-sre-monitor/README.md) |
 | 🌀 **K8s-Pod-Restarter** | CLI, API e Scheduler para reinício seguro de pods no Kubernetes. | Configuração via YAML, métricas Prometheus, integração com Grafana e RBAC mínimo. | [📄 Leia mais](./k8s-pod-restarter/README.md) |
+| 🧩 **Go-Log-Aggregator** | Agregador de logs com tail em tempo real e API de busca. | Fontes: arquivo/HTTP/stdin, ring buffer, filtros regex, métricas Prometheus. | [📄 Leia mais](./go-log-aggregator/README.md) |
 
 
 ---
