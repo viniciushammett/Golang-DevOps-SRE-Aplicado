@@ -1,0 +1,18 @@
+jobs:
+  - name: restart-api-nightly
+    namespace: "prod"
+    selector: "app=myapi,component=backend"
+    schedule: "0 3 * * *"    # diariamente às 03:00
+    dryRun: false
+    force: false
+    maxAge: "1h"
+    gracePeriod: "30s"
+
+  - name: restart-workers-hourly
+    namespace: "jobs"
+    selector: "app=worker"
+    schedule: "0 * * * *"    # todo início de hora
+    dryRun: false
+    force: false
+    maxAge: "10m"
+    gracePeriod: "20s"
