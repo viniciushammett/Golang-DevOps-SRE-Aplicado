@@ -1,0 +1,46 @@
+version: "3.8"
+
+services:
+  alert-router:
+    build: .
+    image: go-alert-router:local
+    container_name: alert-router
+    environment:
+      - CONFIG_PATH=/app/configs/config.yaml
+      - HTTP_ADDR=:8080
+      - LOG_LEVEL=info
+    volumes:
+      - ./configs:/app/configs:ro
+      - ./data:/app/data
+    ports:
+      - "8080:8080"
+    networks: [observ]
+
+  prometheus:
+    image: prom/prometheus:v2.55.0
+    container_name: prometheus
+    command:
+      - "--config.file=/etc/prometheus/prometheus.yml"
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./configs/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+    depends_on: [alert-router]
+    networks: [observ]
+
+  grafana:
+    image: grafana/grafana:11.1.0
+    container_name: grafana
+    environment:
+      - GF_SECURITY_ADMIN_PASSWORD=admin
+      - GF_PATHS_PROVISIONING=/etc/grafana/provisioning
+    ports:
+      - "3000:3000"
+    volumes:
+      - ./dashboards:/var/lib/grafana/dashboards:ro
+      - ./configs/grafana-provisioning:/etc/grafana/provisioning:ro
+    depends_on: [prometheus]
+    networks: [observ]
+
+networks:
+  observ: {}

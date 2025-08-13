@@ -1,0 +1,29 @@
+httpAuthToken: ""   # opcional: defina para proteger rotas /admin/*
+storage:
+  path: "data/alert-router.db"
+
+email:
+  smtpHost: "smtp.example.com"
+  smtpPort: 587
+  username: "user@example.com"
+  password: "secret"
+  from: "Alert Router <alerts@example.com>"
+
+routes:
+  - name: "critical-to-slack"
+    matchers:
+      - { label: "severity", regex: "^(critical|high)$" }
+    dedupeWindow: 2m
+    groupWindow: 30s
+    rateLimitPerMin: 120
+    slack:
+      webhook: "https://hooks.slack.com/services/XXX/YYY/ZZZ"
+      channel: "#alerts"
+
+  - name: "warning-to-email"
+    matchers:
+      - { label: "severity", regex: "^(warning)$" }
+    dedupeWindow: 5m
+    groupWindow: 60s
+    rateLimitPerMin: 60
+    emailTo: ["noc@example.com"]

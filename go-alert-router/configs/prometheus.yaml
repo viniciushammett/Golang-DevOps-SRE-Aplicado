@@ -1,0 +1,8 @@
+global:
+  scrape_interval: 15s
+
+scrape_configs:
+  - job_name: "alert-router"
+    static_configs:
+      - targets: ["alert-router:8080"]
+    metrics_path: /metrics
