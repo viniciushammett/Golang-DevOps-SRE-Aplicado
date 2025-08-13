@@ -1,0 +1,16 @@
+services:
+  - name: homepage
+    url: "https://example.org/"
+    method: "GET"
+    expectedStatus: 200
+    timeout: 3s
+    sloLatency: 500ms
+
+  - name: httpbin-headers
+    url: "https://httpbin.org/headers"
+    method: "GET"
+    expectedStatus: 200
+    timeout: 4s
+    sloLatency: 800ms
+    headers:
+      X-From: "go-sre-monitor"

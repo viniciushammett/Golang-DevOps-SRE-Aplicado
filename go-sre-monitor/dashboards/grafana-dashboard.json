@@ -1,0 +1,39 @@
+{
+  "title": "go-sre-monitor",
+  "schemaVersion": 39,
+  "version": 1,
+  "panels": [
+    {
+      "type": "stat",
+      "title": "Services Up",
+      "targets": [
+        { "expr": "sum(probe_up)" }
+      ],
+      "gridPos": { "x": 0, "y": 0, "w": 6, "h": 5 }
+    },
+    {
+      "type": "graph",
+      "title": "Probe Duration (p95)",
+      "targets": [
+        { "expr": "histogram_quantile(0.95, sum(rate(probe_duration_seconds_bucket[5m])) by (le, service))" }
+      ],
+      "gridPos": { "x": 6, "y": 0, "w": 18, "h": 8 }
+    },
+    {
+      "type": "graph",
+      "title": "Failures",
+      "targets": [
+        { "expr": "sum(rate(probe_failures_total[5m])) by (service)" }
+      ],
+      "gridPos": { "x": 0, "y": 8, "w": 12, "h": 8 }
+    },
+    {
+      "type": "graph",
+      "title": "SLO Breaches",
+      "targets": [
+        { "expr": "sum(rate(slo_latency_breaches_total[5m])) by (service)" }
+      ],
+      "gridPos": { "x": 12, "y": 8, "w": 12, "h": 8 }
+    }
+  ]
+}
