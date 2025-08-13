@@ -1,0 +1,17 @@
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: pod-restarter
+  namespace: sre-tools
+  labels:
+    release: prometheus
+spec:
+  selector:
+    matchLabels:
+      app: pod-restarter
+  namespaceSelector:
+    matchNames: ["sre-tools"]
+  endpoints:
+    - port: http
+      path: /metrics
+      interval: 15s

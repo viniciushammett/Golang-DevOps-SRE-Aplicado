@@ -1,0 +1,55 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: pod-restarter
+  namespace: sre-tools
+  labels:
+    app: pod-restarter
+spec:
+  replicas: 1
+  selector:
+    matchLabels: { app: pod-restarter }
+  template:
+    metadata:
+      labels: { app: pod-restarter }
+    spec:
+      serviceAccountName: pod-restarter
+      containers:
+        - name: restarter
+          image: yourrepo/pod-restarter:0.1.0
+          imagePullPolicy: IfNotPresent
+          args:
+            - "scheduler"
+            - "--config=/app/configs/config.yaml"
+            - "--http-addr=:8080"
+          ports:
+            - name: http
+              containerPort: 8080
+          env:
+            - name: LOG_LEVEL
+              value: "info"
+          volumeMounts:
+            - name: config
+              mountPath: /app/configs
+              readOnly: true
+      volumes:
+        - name: config
+          configMap:
+            name: pod-restarter-config
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: pod-restarter-config
+  namespace: sre-tools
+data:
+  config.yaml: |
+    jobs:
+      - name: restart-api-nightly
+        namespace: "prod"
+        selector: "app=myapi,component=backend"
+        schedule: "0 3 * * *"
+        dryRun: false
+        force: false
+        maxAge: "1h"
+        gracePeriod: "30s"
