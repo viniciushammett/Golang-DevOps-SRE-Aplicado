@@ -1,0 +1,19 @@
+bufferSize: 10000
+
+sources:
+  stdin:
+    enabled: false
+
+  files:
+    - name: "syslog"
+      path: "/var/log/syslog"
+      pollInterval: 300ms
+
+    - name: "app"
+      path: "./app.log"
+      pollInterval: 250ms
+
+  http:
+    - name: "status-endpoint"
+      url: "http://localhost:9000/status"
+      interval: 5s

@@ -1,0 +1,30 @@
+version: "3.8"
+services:
+  logagg:
+    build: .
+    image: go-log-aggregator:local
+    container_name: logagg
+    environment:
+      - CONFIG_PATH=/app/configs/config.yaml
+      - HTTP_ADDR=:8080
+      - LOG_LEVEL=info
+    volumes:
+      - ./configs:/app/configs
+      - /var/log:/var/log:ro
+    ports:
+      - "8080:8080"
+
+  prometheus:
+    image: prom/prometheus:v2.55.0
+    container_name: prometheus
+    ports: ["9090:9090"]
+    volumes:
+      - ./configs/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+    depends_on: [logagg]
+
+  grafana:
+    image: grafana/grafana:11.1.0
+    container_name: grafana
+    ports: ["3000:3000"]
+    environment: [GF_SECURITY_ADMIN_PASSWORD=admin]
+    depends_on: [prometheus]
