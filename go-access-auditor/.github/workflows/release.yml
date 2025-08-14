@@ -1,0 +1,159 @@
+name: Release (Binaries + SBOM)
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Tag para release (ex: v1.2.3) — usa a ref atual se vazio"
+        required: false
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    name: Build ${{ matrix.goos }}-${{ matrix.goarch }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        goos:   [linux, darwin, windows]
+        goarch: [amd64, arm64]
+    env:
+      TAG: ${{ github.ref_name }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: "1.22.x"
+          cache: true
+
+      - name: Compute tag
+        id: tag
+        run: |
+          if [ -n "${{ github.event.inputs.tag }}" ]; then
+            echo "tag=${{ github.event.inputs.tag }}" >> $GITHUB_OUTPUT
+          else
+            echo "tag=${GITHUB_REF_NAME}" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Build server
+        env:
+          GOOS:   ${{ matrix.goos }}
+          GOARCH: ${{ matrix.goarch }}
+          CGO_ENABLED: 0
+        run: |
+          mkdir -p dist
+          BIN="go-access-auditor"
+          EXT=""
+          if [ "${GOOS}" = "windows" ]; then EXT=".exe"; fi
+          OUT="dist/${BIN}_${{ matrix.goos }}_${{ matrix.goarch }}${EXT}"
+          go build -ldflags "-s -w -X main.version=${{ steps.tag.outputs.tag }}" -o "${OUT}" ./cmd/server
+          echo "server_bin=${OUT}" >> $GITHUB_OUTPUT
+
+      - name: Build agent
+        env:
+          GOOS:   ${{ matrix.goos }}
+          GOARCH: ${{ matrix.goarch }}
+          CGO_ENABLED: 0
+        run: |
+          mkdir -p dist
+          BIN="go-access-agent"
+          EXT=""
+          if [ "${GOOS}" = "windows" ]; then EXT=".exe"; fi
+          OUT="dist/${BIN}_${{ matrix.goos }}_${{ matrix.goarch }}${EXT}"
+          go build -ldflags "-s -w -X main.version=${{ steps.tag.outputs.tag }}" -o "${OUT}" ./cmd/agent
+          echo "agent_bin=${OUT}" >> $GITHUB_OUTPUT
+
+      - name: Package archives
+        id: pkg
+        run: |
+          set -e
+          OS="${{ matrix.goos }}"
+          ARCH="${{ matrix.goarch }}"
+          TAG="${{ steps.tag.outputs.tag }}"
+          mkdir -p artifacts
+
+          # Compose file lists
+          if [ "$OS" = "windows" ]; then
+            SERVER="dist/go-access-auditor_${OS}_${ARCH}.exe"
+            AGENT="dist/go-access-agent_${OS}_${ARCH}.exe"
+            ARCHIVE="artifacts/go-access-auditor_${TAG}_${OS}_${ARCH}.zip"
+            zip -j "$ARCHIVE" "$SERVER" "$AGENT" LICENSE README.md || true
+          else
+            SERVER="dist/go-access-auditor_${OS}_${ARCH}"
+            AGENT="dist/go-access-agent_${OS}_${ARCH}"
+            ARCHIVE="artifacts/go-access-auditor_${TAG}_${OS}_${ARCH}.tar.gz"
+            tar -czf "$ARCHIVE" -C dist "$(basename "$SERVER")" "$(basename "$AGENT")" -C .. LICENSE README.md
+          fi
+
+          echo "archive=${ARCHIVE}" >> $GITHUB_OUTPUT
+
+      - name: Upload archive artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: "bundle_${{ matrix.goos }}_${{ matrix.goarch }}"
+          path: ${{ steps.pkg.outputs.archive }}
+
+  checksums:
+    name: Checksums + SBOM
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download all archives
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
+      - name: Generate checksums
+        run: |
+          cd artifacts
+          find . -type f \( -name "*.tar.gz" -o -name "*.zip" \) -print0 | sort -z | xargs -0 shasum -a 256 > SHA256SUMS
+
+      - name: Install Syft (SBOM)
+        uses: anchore/sbom-action/download-syft@v0.17.6
+
+      - name: Generate SBOMs (SPDX)
+        run: |
+          set -e
+          mkdir -p sboms
+          for f in $(find artifacts -type f -name "*.tar.gz" -o -name "*.zip"); do
+            base=$(basename "$f")
+            ./syft packages "file:$f" -o spdx-json > "sboms/${base}.spdx.json"
+          done
+
+      - name: Upload checksums & SBOM artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: release_meta
+          path: |
+            artifacts/SHA256SUMS
+            sboms/*.spdx.json
+
+  release:
+    name: Create GitHub Release
+    needs: [build, checksums]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download bundles
+        uses: actions/download-artifact@v4
+        with:
+          path: dl
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.ref_name }}
+          name: ${{ github.ref_name }}
+          generate_release_notes: true
+          files: |
+            dl/**/go-access-auditor_*.tar.gz
+            dl/**/go-access-auditor_*.zip
+            dl/**/SHA256SUMS
+            dl/**/**/*.spdx.json
