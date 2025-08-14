@@ -64,6 +64,10 @@ Importe `dashboards/grafana-access-auditor.json` no Grafana (métricas de ingest
 - Restrinja IPs ou use Ingress com Autenticação.
 - Evite enviar dados sensíveis em claro.
 
+**Scripts de coleta (wrappers + hook Bash)**
+
+Requisitos dos wrappers: `jq` e `curl`. Você pode embutir JSON sem jq, mas fica mais verboso.
+
 ## 
 ### 🔄 CI/CD
 
