@@ -1,0 +1,14 @@
+version: "3.8"
+services:
+  orchestrator:
+    build: .
+    image: go-deploy-orchestrator:local
+    container_name: deploy-orchestrator
+    environment:
+      - CONFIG_PATH=/app/configs/config.yaml
+      - HTTP_ADDR=:8080
+      - LOG_LEVEL=info
+    volumes:
+      - ./configs:/app/configs:ro
+      - ./data:/app/data
+    ports: ["8080:8080"]
