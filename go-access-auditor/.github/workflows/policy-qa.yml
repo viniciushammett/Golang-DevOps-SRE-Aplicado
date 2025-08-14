@@ -1,0 +1,65 @@
+name: Policy QA (Regex Rules)
+
+on:
+  pull_request:
+    branches: [ main, master ]
+    paths:
+      - "policies/**"
+      - "internal/rules/**"
+      - "tools/rules_tester.go"
+      - "go.mod"
+      - "go.sum"
+      - ".github/workflows/policy-qa.yml"
+  push:
+    branches: [ main, master ]
+    paths:
+      - "policies/**"
+      - "internal/rules/**"
+      - "tools/rules_tester.go"
+      - "go.mod"
+      - "go.sum"
+      - ".github/workflows/policy-qa.yml"
+
+jobs:
+  policy-qa:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: "1.22.x"
+          cache: true
+
+      # Dependências de scripts (wrappers/hook usam jq; aqui só garantimos caso algum alvo utilize)
+      - name: Install jq
+        run: sudo apt-get update && sudo apt-get install -y jq
+
+      - name: Go Tidy
+        run: go mod tidy
+
+      - name: Build rules tester
+        run: |
+          mkdir -p bin
+          go build -o bin/rules-tester ./tools/rules_tester.go
+
+      - name: Validate policies (prudent)
+        run: |
+          ./bin/rules-tester policies/rules.prudent.yaml policies/examples/prudent.jsonl
+
+      - name: Validate policies (aggressive)
+        run: |
+          ./bin/rules-tester policies/rules.aggressive.yaml policies/examples/aggressive.jsonl
+
+      # Opcional: valide também o “extended” usando os mesmos exemplos do agressivo
+      - name: Validate policies (extended)
+        run: |
+          ./bin/rules-tester policies/rules.extended.yaml policies/examples/aggressive.jsonl
+
+      - name: Unit tests (rules)
+        run: |
+          go test ./internal/rules -v
