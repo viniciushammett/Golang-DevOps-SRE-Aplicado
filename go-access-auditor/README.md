@@ -22,7 +22,50 @@ go-access-auditor/
 ├── dashboards/grafana-access-auditor.json
 └── README.md
 ```
-## 🔄 CI/CD
+**Início rápido**
+```bash
+go mod tidy
+make build
+CONFIG_PATH=configs/config.yaml ./bin/auditor
+# em outro terminal:
+echo 'kubectl delete pods --all -n prod' | ./bin/agent -api http://localhost:8080 -source kubectl -user $USER
+```
+**Configuração** (`configs/config.yaml`)
+```yaml
+server: { addr: ":8080" }
+authToken: ""              # opcional p/ exigir Bearer no POST /v1/events
+storage: { path: "data/auditor.db" }
+rules:
+  - { name: "danger-rm-root", regex: "(?i)\\brm\\s+-rf\\s+/(\\s|$)" }
+  - { name: "drop-database",  regex: "(?i)\\bdrop\\s+database\\b" }
+slack: { enabled: false, webhook: "https://hooks.slack.com/services/..." }
+```
+**API/Consultas**
+- `POST /v1/events` (JSON): `{ when?, user, host?, source, command, meta? }`
+- `GET /v1/events?q=drop&user=alice&source=psql&limit=200&sensitive=true`
+- `GET /v1/export.csv` (mesmos parâmetros)
+- `GET /metrics, GET /healthz`
+
+**Docker Compose**
+```bash
+docker compose up --build
+# API: http://localhost:8080  Grafana: http://localhost:3000  Prometheus: http://localhost:9090
+```
+**Dashboard**
+Importe `dashboards/grafana-access-auditor.json` no Grafana (métricas de ingestão e matches sensíveis).
+
+**Integração real (idéias)**
+- **bash:** `PROMPT_COMMAND='history -a; history 1 | cut -c 8- | auditor-agent -api http://auditor:8080 -source bash -user $USER -cmd "$(history 1 | cut -c 8-)"'`
+- **kubectl** wrapper: renomeie `kubectl` real e crie script que registra e delega.
+- **auditd/snoopy:** encaminhar para stdin do agente.
+
+**Segurança**
+- Habilite `authToken` para POSTs.
+- Restrinja IPs ou use Ingress com Autenticação.
+- Evite enviar dados sensíveis em claro.
+
+## 
+### 🔄 CI/CD
 
 Este repositório vem com uma esteira **Full CI** no GitHub Actions cobrindo **lint**, **build**, **testes**, e **QA de políticas (regex)**.
 
