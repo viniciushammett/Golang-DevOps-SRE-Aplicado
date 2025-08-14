@@ -263,3 +263,7 @@ Este projeto publica binários para Linux/macOS/Windows (amd64/arm64) + **SBOM S
 - `SHA256SUMS`
 - `*.spdx.json` (SBOM por artefato)
 > Dica: use **branch protection** e **PRs** para garantir que apenas versões validadas (lint/tests/policy QA) sejam tagueadas.
+##
+### Licença
+
+MIT
