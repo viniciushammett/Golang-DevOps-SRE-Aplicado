@@ -1,0 +1,5 @@
+{"line":"kubectl delete pods --all -n prod", "expected":["kubectl-delete-all"]}
+{"line":"iptables -F", "expected":["iptables-flush"]}
+{"line":"mount -o rw /", "expected":["mount-rw-root"]}
+{"line":"systemctl stop *", "expected":["systemctl-stop-all"]}
+{"line":"drop database foo", "expected":["drop-database"]}
