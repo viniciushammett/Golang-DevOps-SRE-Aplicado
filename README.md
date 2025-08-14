@@ -45,6 +45,7 @@ Cada projeto é **100% funcional**, com código aberto, documentação e exemplo
 | 🌀 **K8s-Pod-Restarter** | CLI, API e Scheduler para reinício seguro de pods no Kubernetes. | Configuração via YAML, métricas Prometheus, integração com Grafana e RBAC mínimo. | [📄 Leia mais](./k8s-pod-restarter/README.md) |
 | 🧩 **Go-Log-Aggregator** | Agregador de logs com tail em tempo real e API de busca. | Fontes: arquivo/HTTP/stdin, ring buffer, filtros regex, métricas Prometheus. | [📄 Leia mais](./go-log-aggregator/README.md) |
 | 🚨 **Go Alert Router & Notifier** | Serviço Golang para receber, deduplicar, agrupar e rotear alertas para múltiplos canais com métricas Prometheus. | CLI + API + retries com backoff, silences, rate limit, integração com Slack, Email, PagerDuty e dashboards Grafana. | [📄 Leia mais](./go-alert-router/README.md) |
+| 🚀 **Go Deploy Orchestrator** | Orquestrador de deploys e rollback automático para Kubernetes com integração CI/CD. | API + CLI, canary e blue-green, thresholds Prometheus, histórico e aprovações manuais. | [📄 Leia mais](./go-deploy-orchestrator/README.md) |
 
 ---
 
