@@ -1,0 +1,19 @@
+{
+  "title": "Go Access Auditor",
+  "uid": "gaa-main",
+  "schemaVersion": 39,
+  "style": "dark",
+  "tags": ["security","audit","devops"],
+  "time": { "from": "now-1h", "to": "now" },
+  "refresh": "10s",
+  "panels": [
+    { "type":"stat","title":"Eventos (5m)","id":1,"gridPos":{"h":4,"w":6,"x":0,"y":0},
+      "targets":[{"expr":"sum(increase(access_auditor_events_ingested_total[5m]))","refId":"A"}] },
+    { "type":"stat","title":"Sensíveis (5m)","id":2,"gridPos":{"h":4,"w":6,"x":6,"y":0},
+      "targets":[{"expr":"sum(increase(access_auditor_sensitive_matches_total[5m]))","refId":"A"}] },
+    { "type":"timeseries","title":"Eventos por source (rps)","id":3,"gridPos":{"h":8,"w":12,"x":0,"y":4},
+      "targets":[{"expr":"sum by (source) (rate(access_auditor_events_ingested_total[2m]))","legendFormat":"{{source}}","refId":"A"}] },
+    { "type":"timeseries","title":"Sensíveis por regra (rps)","id":4,"gridPos":{"h":8,"w":12,"x":12,"y":4},
+      "targets":[{"expr":"sum by (rule) (rate(access_auditor_sensitive_matches_total[2m]))","legendFormat":"{{rule}}","refId":"A"}] }
+  ]
+}
