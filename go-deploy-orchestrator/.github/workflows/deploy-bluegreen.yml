@@ -1,0 +1,26 @@
+name: Deploy Blue-Green
+
+on:
+  workflow_dispatch:
+    inputs:
+      image_tag:
+        description: "Tag da imagem (ex: 1.2.3)"
+        required: true
+
+jobs:
+  bluegreen:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Disparar deploy Blue-Green
+        run: |
+          curl -XPOST "$ORCHESTRATOR_URL/deploys" \
+            -H "Content-Type: application/json" \
+            -H "Authorization: Bearer $ORCHESTRATOR_TOKEN" \
+            -d '{
+              "app": "myapp",
+              "namespace": "default",
+              "image": "repo/myapp:${{ github.event.inputs.image_tag }}",
+              "strategy": "bluegreen",
+              "params": { "probeWait": "30", "maxError": "0.02", "maxP95": "0.5" },
+              "requireApproval": false
+            }'
