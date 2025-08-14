@@ -27,3 +27,5 @@
 # Sistemas/variações
 - { name: "mount-rw-root",          regex: "(?i)\\bmount\\b.*\\s/\\s.*\\brw\\b" }
 - { name: "systemctl-stop-all",     regex: "(?i)\\bsystemctl\\s+stop\\s+\\*\\b" }
+
+# Dica: mantenha a rules.extended.yaml como conjunto “default”, prudent para produção conservadora e aggressive para ambientes de sandbox/forense.
