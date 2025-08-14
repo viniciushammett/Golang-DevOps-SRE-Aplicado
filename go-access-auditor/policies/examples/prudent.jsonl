@@ -1,0 +1,5 @@
+{"line":"rm -rf /", "expected":["danger-rm-root"]}
+{"line":"helm uninstall api -n production", "expected":["helm-uninstall-prd"]}
+{"line":"UPDATE users SET admin=true", "expected":["update-no-where"]}
+{"line":"DELETE FROM orders", "expected":["delete-no-where"]}
+{"line":"truncate table logs", "expected":["truncate-table"]}
