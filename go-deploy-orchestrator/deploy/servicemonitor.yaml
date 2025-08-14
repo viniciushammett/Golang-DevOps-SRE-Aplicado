@@ -1,0 +1,15 @@
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: deploy-orchestrator
+  namespace: sre-tools
+  labels: { release: prometheus }
+spec:
+  selector:
+    matchLabels: { app: deploy-orchestrator }
+  namespaceSelector:
+    matchNames: ["sre-tools"]
+  endpoints:
+    - port: http
+      path: /metrics
+      interval: 15s

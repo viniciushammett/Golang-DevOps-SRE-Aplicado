@@ -1,0 +1,11 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: deploy-orchestrator
+  namespace: sre-tools
+spec:
+  selector: { app: deploy-orchestrator }
+  ports:
+    - name: http
+      port: 8080
+      targetPort: http

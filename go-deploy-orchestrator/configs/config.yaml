@@ -1,0 +1,26 @@
+server:
+  httpAddr: ":8080"
+
+kube:
+  kubeconfig: ""     # vazio = in-cluster; senão, caminho do kubeconfig
+  context: ""
+
+prometheus:
+  url: "http://prometheus:9090"
+  timeout: 10s
+  queries:
+    errorRate: 'sum(rate(http_requests_total{job="myapp",status=~"5.."}[5m])) / sum(rate(http_requests_total{job="myapp"}[5m]))'
+    p95: 'histogram_quantile(0.95, sum(rate(http_request_duration_seconds_bucket{job="myapp"}[5m])) by (le))'
+  thresholds:
+    maxError: 0.02
+    maxP95: 0.5
+  window: "5m"
+
+storage:
+  path: "data/deploy-orchestrator.db"
+
+defaults:
+  canaryStepPercent: 20
+  canaryPauseSec: 60
+
+authToken: "" # opcional: define para proteger /deploys/*/approve

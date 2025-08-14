@@ -1,0 +1,40 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: deploy-orchestrator
+  namespace: sre-tools
+  labels: { app: deploy-orchestrator }
+spec:
+  replicas: 1
+  selector:
+    matchLabels: { app: deploy-orchestrator }
+  template:
+    metadata:
+      labels: { app: deploy-orchestrator }
+    spec:
+      serviceAccountName: deploy-orchestrator
+      containers:
+        - name: orchestrator
+          image: yourrepo/deploy-orchestrator:0.1.0
+          imagePullPolicy: IfNotPresent
+          env:
+            - { name: CONFIG_PATH, value: /app/configs/config.yaml }
+            - { name: HTTP_ADDR, value: ":8080" }
+            - { name: LOG_LEVEL, value: "info" }
+          ports:
+            - { name: http, containerPort: 8080 }
+          volumeMounts:
+            - { name: cfg, mountPath: /app/configs, readOnly: true }
+      volumes:
+        - name: cfg
+          configMap:
+            name: deploy-orchestrator-config
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: deploy-orchestrator-config
+  namespace: sre-tools
+data:
+  config.yaml: |
+    # cole seu configs/config.yaml aqui
