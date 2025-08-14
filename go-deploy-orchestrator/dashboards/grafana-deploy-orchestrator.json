@@ -1,0 +1,19 @@
+{
+  "title": "Go Deploy Orchestrator",
+  "uid": "gdo-main",
+  "schemaVersion": 39,
+  "style": "dark",
+  "tags": ["deploy", "orchestrator", "devops"],
+  "time": { "from": "now-1h", "to": "now" },
+  "refresh": "10s",
+  "panels": [
+    { "type":"stat","title":"Deploys iniciados (5m)","id":1,"gridPos":{"h":4,"w":6,"x":0,"y":0},
+      "targets":[{"expr":"sum(increase(do_deploys_started_total[5m]))","refId":"A"}] },
+    { "type":"stat","title":"Sucessos (5m)","id":2,"gridPos":{"h":4,"w":6,"x":6,"y":0},
+      "targets":[{"expr":"sum(increase(do_deploys_succeeded_total[5m]))","refId":"A"}] },
+    { "type":"stat","title":"Falhas (5m)","id":3,"gridPos":{"h":4,"w":6,"x":12,"y":0},
+      "targets":[{"expr":"sum(increase(do_deploys_failed_total[5m]))","refId":"A"}] },
+    { "type":"timeseries","title":"Duração por etapa (p95)","id":4,"gridPos":{"h":8,"w":24,"x":0,"y":4},
+      "targets":[{"expr":"histogram_quantile(0.95, sum by (le,step) (rate(do_step_duration_seconds_bucket[5m])))","refId":"A","legendFormat":"{{step}}"}] }
+  ]
+}
