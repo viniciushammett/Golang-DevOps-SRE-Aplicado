@@ -1,0 +1,23 @@
+server:
+  addr: ":8080"
+
+authToken: ""  # opcional: defina para exigir Bearer token nos POST /v1/events
+
+storage:
+  path: "data/auditor.db"
+
+# Regras de comandos sensíveis (regex)
+rules:
+  - name: "danger-rm-root"
+    regex: "(?i)\\brm\\s+-rf\\s+/(\\s|$)"
+  - name: "drop-database"
+    regex: "(?i)\\bdrop\\s+database\\b"
+  - name: "kubectl-delete-all"
+    regex: "(?i)\\bkubectl\\s+delete\\s+.*\\s+--all\\b"
+  - name: "sudo-passwd"
+    regex: "(?i)\\bpasswd\\s+root\\b"
+
+slack:
+  enabled: false
+  webhook: "https://hooks.slack.com/services/XXX/YYY/ZZZ"
+  channel: "#security"
