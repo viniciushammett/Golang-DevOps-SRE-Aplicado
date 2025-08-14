@@ -4,6 +4,7 @@ Auditoria centralizada de **acessos e comandos** (Linux/Kubernetes/DBs). Inclui 
 
 [![Full CI](https://github.com/viniciushammett/go-access-auditor/actions/workflows/ci.yml/badge.svg)](.github/workflows/ci.yml)
 [![Policy QA](https://github.com/viniciushammett/go-access-auditor/actions/workflows/policy-qa.yml/badge.svg)](.github/workflows/policy-qa.yml)
+[![Release](https://github.com/viniciushammett/go-access-auditor/actions/workflows/release.yml/badge.svg)](.github/workflows/release.yml)
 
 ## Recursos
 - Agente envia eventos (stdin/linha de comando): `user@host`, `source`, `command`
@@ -100,7 +101,7 @@ cp policies/rules.prudent.yaml configs/rules.yaml
 - Evite enviar dados sensíveis em claro.
 ##
 ### **Scripts de coleta (wrappers + hook Bash)**
-Requisitos dos wrappers: `jq` e `curl`. Você pode embutir JSON sem jq, mas fica mais verboso.
+> Requisitos dos wrappers: `jq` e `curl`. Você pode embutir JSON sem jq, mas fica mais verboso.
 ## 
 ### 🔌 Wrappers & Hook Bash
 
@@ -116,7 +117,7 @@ sudo mv /usr/local/bin/kubectl /usr/local/bin/kubectl.real
 sudo install -m0755 ./scripts/kubectl-wrapper.sh /usr/local/bin/kubectl
 ```
 - **psql & helm: repita o procedimento trocando os nomes.**
-- Dica: use `make install-wrappers` para instalar todos (renomeie os binários originais para *.real antes).
+> Dica: use `make install-wrappers` para instalar todos (renomeie os binários originais para *.real antes).
 ##
 ### 📋 Políticas de Regras (regex)
 Use nossa política ampliada:
@@ -198,9 +199,66 @@ make rules-validate-aggressive
 # opcional
 make rules-validate-extended
 ```
-S
-Se não tiver golangci-lint, instale:
+**Se não tiver `golangci-lint`, instale:**
 ```bash
 curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh \
   | sh -s -- -b $(go env GOPATH)/bin v1.59.1
 ```
+##
+### 🧩 Mantendo as políticas de regex
+- Adicione/edite regras nos perfis:
+  - `policies/rules.prudent.yaml` — **baixo ruído** (recomendado p/ prod)
+  - `policies/rules.extended.yaml` — conjunto **abrangente** (default)
+  - `policies/rules.aggressive.yaml` — **cobertura máxima** (sandbox/forense)
+- Inclua exemplos de linha em **JSONL:**
+  - `policies/examples/prudent.jsonl`
+  - `policies/examples/aggressive.jsonl`
+
+Formato **JSONL** (um JSON por linha):
+```json
+{"line":"rm -rf /", "expected":["danger-rm-root"]}
+{"line":"helm uninstall api -n production", "expected":["helm-uninstall-prd"]}
+```
+valide localmente com:
+```bash
+make rules-validate-prudent
+make rules-validate-aggressive
+```
+Se quebrar no CI, ajuste a regex ou os exemplos.
+##
+### 🛡️ Branch protection (recomendado)
+Ative em **Settings → Branches → Branch protection rules:**
+- ✅ Exigir status checks: Full CI / lint, Full CI / build, Full CI / tests, Full CI / policy-qa
+- ✅ Exigir PR antes de merge
+- ✅ Exigir revisões (pelo menos 1)
+##
+### 🐛 Troubleshooting
+- **Lint falhando**: rode `golangci-lint run ./...` e corrija os apontamentos (imports, errs ignorados, complexidade, etc.).
+- Build falhou: verifique `go.mod`, versões de libs e imports.
+- Tests falhando: execute `go test -run <NomeDoTeste> -v` para isolar.
+- Policy QA falhou:
+  - Caso “regex inválida”: ajuste a expressão na política.
+  - Caso “mismatch”: atualize o **exemplo** ou a **regex** (o utilitário mostra o que casou vs. o esperado).
+##
+### 🚀 Publicando Releases
+
+Este projeto publica binários para Linux/macOS/Windows (amd64/arm64) + **SBOM SPDX** e **checksums** automaticamente.
+
+**Como usar:**
+1. Faça versionamento semântico:
+   ```bash
+   git tag v1.2.3
+   git push origin v1.2.3
+   ```
+2. O workflow `.github/workflows/release.yml` irá:
+   - Compilar server e agent para todas as plataformas
+   - Empacotar (.tar.gz/.zip)
+   - Gerar SHA256SUMS
+   - Gerar SBOM com Syft (*.spdx.json)
+   - Criar o GitHub Release e anexar os artefatos
+
+**Arquivos gerados:**
+- `go-access-auditor_<TAG>_<os>_<arch>.tar.gz|zip`
+- `SHA256SUMS`
+- `*.spdx.json` (SBOM por artefato)
+> Dica: use **branch protection** e **PRs** para garantir que apenas versões validadas (lint/tests/policy QA) sejam tagueadas.
