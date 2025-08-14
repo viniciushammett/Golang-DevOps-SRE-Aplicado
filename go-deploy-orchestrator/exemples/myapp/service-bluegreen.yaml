@@ -1,0 +1,11 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: myapp
+spec:
+  selector:
+    app: myapp
+    track: blue   # ou green, trocado pelo orquestrador
+  ports:
+    - port: 80
+      targetPort: 8080

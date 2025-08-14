@@ -1,0 +1,24 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: myapp-blue
+  labels:
+    app: myapp
+    track: blue
+spec:
+  replicas: 5
+  selector:
+    matchLabels:
+      app: myapp
+      track: blue
+  template:
+    metadata:
+      labels:
+        app: myapp
+        track: blue
+    spec:
+      containers:
+        - name: myapp
+          image: repo/myapp:1.0.0
+          ports:
+            - containerPort: 8080
