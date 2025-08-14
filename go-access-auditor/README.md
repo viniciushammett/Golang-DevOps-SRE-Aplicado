@@ -45,29 +45,28 @@ slack: { enabled: false, webhook: "https://hooks.slack.com/services/..." }
 - `GET /v1/events?q=drop&user=alice&source=psql&limit=200&sensitive=true`
 - `GET /v1/export.csv` (mesmos parâmetros)
 - `GET /metrics, GET /healthz`
-
+##
 **Docker Compose**
 ```bash
 docker compose up --build
 # API: http://localhost:8080  Grafana: http://localhost:3000  Prometheus: http://localhost:9090
 ```
+##
 **Dashboard**
 Importe `dashboards/grafana-access-auditor.json` no Grafana (métricas de ingestão e matches sensíveis).
-
+##
 **Integração real (idéias)**
 - **bash:** `PROMPT_COMMAND='history -a; history 1 | cut -c 8- | auditor-agent -api http://auditor:8080 -source bash -user $USER -cmd "$(history 1 | cut -c 8-)"'`
 - **kubectl** wrapper: renomeie `kubectl` real e crie script que registra e delega.
 - **auditd/snoopy:** encaminhar para stdin do agente.
-
+##
 **Segurança**
 - Habilite `authToken` para POSTs.
 - Restrinja IPs ou use Ingress com Autenticação.
 - Evite enviar dados sensíveis em claro.
-
+##
 **Scripts de coleta (wrappers + hook Bash)**
-
 Requisitos dos wrappers: `jq` e `curl`. Você pode embutir JSON sem jq, mas fica mais verboso.
-
 ## 
 ### 🔄 CI/CD
 
