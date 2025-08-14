@@ -22,6 +22,7 @@ logs: ; docker compose logs -f auditor
 send:
 	echo 'rm -rf /' | ./bin/agent -api http://localhost:8080 -source bash -user $(USER)
 
+##################################################################
 PREFIX ?= /usr/local
 BIN    ?= $(PREFIX)/bin
 
@@ -47,3 +48,29 @@ install-policies:
 	install -d /etc/go-access-auditor
 	install -m0644 policies/rules.extended.yaml /etc/go-access-auditor/rules.yaml
 	@echo "Lembre-se de apontar configs/config.yaml para a política instalada."
+
+# ===========================
+# Políticas (regex) – validação
+# ===========================
+TOOLS_BIN ?= bin
+RULES_TESTER := $(TOOLS_BIN)/rules-tester
+
+$(RULES_TESTER):
+	@mkdir -p $(TOOLS_BIN)
+	go build -o $(RULES_TESTER) ./tools/rules_tester.go
+
+# Valida regras prudentes com exemplos
+rules-validate-prudent: $(RULES_TESTER)
+	$(RULES_TESTER) policies/rules.prudent.yaml policies/examples/prudent.jsonl
+
+# Valida regras agressivas com exemplos
+rules-validate-aggressive: $(RULES_TESTER)
+	$(RULES_TESTER) policies/rules.aggressive.yaml policies/examples/aggressive.jsonl
+
+# Valida pacote "extended" se desejar
+rules-validate-extended: $(RULES_TESTER)
+	$(RULES_TESTER) policies/rules.extended.yaml policies/examples/aggressive.jsonl
+
+# Executa go test dos pacotes
+rules-unit-test:
+	go test ./internal/rules -v
