@@ -1,0 +1,24 @@
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: access-auditor-agent
+  namespace: sre-tools
+spec:
+  selector: { matchLabels: { app: access-auditor-agent } }
+  template:
+    metadata: { labels: { app: access-auditor-agent } }
+    spec:
+      serviceAccountName: deploy-orchestrator # ou outra SA com permissão de logs/hostPath se precisar
+      containers:
+        - name: agent
+          image: go-access-auditor:local   # ou sua imagem publicada com /usr/local/bin/auditor-agent
+          command: ["/usr/local/bin/auditor-agent"]
+          env:
+            - { name: api,   value: "http://auditor.sre-tools.svc:8080" }
+            - { name: token, valueFrom: { secretKeyRef: { name: auditor-token, key: token } } }
+          # se quiser observar arquivos de log e enviar linhas como eventos (opcional)
+          volumeMounts:
+            - { name: varlog, mountPath: /var/log, readOnly: true }
+      volumes:
+        - name: varlog
+          hostPath: { path: /var/log, type: Directory }
