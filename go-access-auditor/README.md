@@ -60,14 +60,74 @@ Importe `dashboards/grafana-access-auditor.json` no Grafana (métricas de ingest
 - **kubectl** wrapper: renomeie `kubectl` real e crie script que registra e delega.
 - **auditd/snoopy:** encaminhar para stdin do agente.
 ##
-**Segurança**
+### 🎛 Perfis de políticas
+
+Você pode escolher entre três perfis prontos:
+
+- `policies/rules.prudent.yaml` — foco em alto risco e baixo ruído (recomendado em produção).
+- `policies/rules.extended.yaml` — conjunto abrangente “default”.
+- `policies/rules.aggressive.yaml` — cobertura máxima, pode gerar mais alertas (sandbox/forense).
+
+Para validar as políticas com exemplos:
+```bash
+make rules-validate-prudent
+make rules-validate-aggressive
+# opcional
+make rules-validate-extended
+```
+Para testes unitários do motor de regras:
+```bash
+make rules-unit-test
+
+Dica: mantenha seus exemplos reais (anonimizados) em policies/examples/*.jsonl para evitar regressões ao atualizar regex.
+
+```
+Config rápida para alternar o perfil
+
+No `configs/config.yaml`, você pode “incluir” o conteúdo de um perfil usando `yq` no pipeline de build/deploy, ou simplesmente trocar manualmente. Ex.:
+
+```bash
+# usar perfil prudente
+cp policies/rules.prudent.yaml configs/rules.yaml
+# e no configs/config.yaml, deixe:
+# rules: (conteúdo do rules.yaml) – ou importe via pipeline
+```
+##
+### **Segurança**
 - Habilite `authToken` para POSTs.
 - Restrinja IPs ou use Ingress com Autenticação.
 - Evite enviar dados sensíveis em claro.
 ##
-**Scripts de coleta (wrappers + hook Bash)**
+### **Scripts de coleta (wrappers + hook Bash)**
 Requisitos dos wrappers: `jq` e `curl`. Você pode embutir JSON sem jq, mas fica mais verboso.
 ## 
+### 🔌 Wrappers & Hook Bash
+
+- **Hook Bash**: adicione ao `~/.bashrc` (ou `/etc/profile.d/`):
+```bash
+source ./scripts/bash-history-hook.sh
+export AUDITOR_API="http://auditor:8080"
+export AUDITOR_TOKEN=""  # se usar auth
+```
+- **kubectl wrapper:**
+```bash
+sudo mv /usr/local/bin/kubectl /usr/local/bin/kubectl.real
+sudo install -m0755 ./scripts/kubectl-wrapper.sh /usr/local/bin/kubectl
+```
+- **psql & helm: repita o procedimento trocando os nomes.**
+- Dica: use `make install-wrappers` para instalar todos (renomeie os binários originais para *.real antes).
+##
+### 📋 Políticas de Regras (regex)
+Use nossa política ampliada:
+```bash
+cp policies/rules.extended.yaml configs/
+# e aponte em configs/config.yaml (ou mescle)
+```
+##
+### 🧷 Agent como Daemon
+- Kubernetes: `kubectl apply -f deploy/agent-daemonset.yaml`
+- Linux: `make install-systemd-agent` (usa `packaging/systemd/auditor-agent.service`)
+##
 ### 🔄 CI/CD
 
 Este repositório vem com uma esteira **Full CI** no GitHub Actions cobrindo **lint**, **build**, **testes**, e **QA de políticas (regex)**.
