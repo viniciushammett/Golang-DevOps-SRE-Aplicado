@@ -90,3 +90,10 @@ make rules-validate-prudent
 make rules-validate-aggressive
 # opcional
 make rules-validate-extended
+```
+S
+Se não tiver golangci-lint, instale:
+```bash
+curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh \
+  | sh -s -- -b $(go env GOPATH)/bin v1.59.1
+```
