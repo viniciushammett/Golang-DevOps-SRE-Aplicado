@@ -47,6 +47,7 @@ Cada projeto é **100% funcional**, com código aberto, documentação e exemplo
 | 🚨 **Go Alert Router & Notifier** | Serviço Golang para receber, deduplicar, agrupar e rotear alertas para múltiplos canais com métricas Prometheus. | CLI + API + retries com backoff, silences, rate limit, integração com Slack, Email, PagerDuty e dashboards Grafana. | [📄 Leia mais](./go-alert-router/README.md) |
 | 🚀 **Go Deploy Orchestrator** | Orquestrador de deploys e rollback automático para Kubernetes com integração CI/CD. | API + CLI, canary e blue-green, thresholds Prometheus, histórico e aprovações manuais. | [📄 Leia mais](./go-deploy-orchestrator/README.md) |
 | 🛡 **Go Access Auditor** | Auditoria centralizada de acessos e comandos em ambientes críticos (Linux, Kubernetes, DBs). | Agente + API + Dashboard, alertas para comandos sensíveis, métricas Prometheus e relatórios CSV/PDF. | [📄 Leia mais](./go-access-auditor/README.md) |
+| 🔍 **Go Log Anomaly Detector** | Serviço de detecção de anomalias em logs em tempo real. | Consome via API/Kafka/arquivo, aplica regras YAML, envia alertas e expõe métricas Prometheus. | [📄 Leia mais](./go-log-anomaly-detector/README.md) |
 
 ---
 
