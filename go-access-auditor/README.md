@@ -20,3 +20,71 @@ go-access-auditor/
 ├── dashboards/grafana-access-auditor.json
 └── README.md
 ```
+## 🔄 CI/CD
+
+Este repositório vem com uma esteira **Full CI** no GitHub Actions cobrindo **lint**, **build**, **testes**, e **QA de políticas (regex)**.
+
+[![Full CI](https://github.com/your-org/your-repo/actions/workflows/ci.yml/badge.svg)](.github/workflows/ci.yml)
+[![Policy QA](https://github.com/your-org/your-repo/actions/workflows/policy-qa.yml/badge.svg)](.github/workflows/policy-qa.yml)
+
+> Ajuste `your-org/your-repo` para o caminho do seu repositório.
+
+### 🧭 Resumo do pipeline
+
+**Workflow:** `.github/workflows/ci.yml`  
+**Gatilhos:** `push` e `pull_request` para `main`/`master`.
+
+**Ordem dos jobs:**
+
+1. **Lint** — `golangci-lint` em `./...`  
+2. **Build** — compila **server** e **agent**  
+3. **Tests** — executa `go test ./... -cover`  
+4. **Policy QA** — valida regras (prudente/agressiva/extended) com exemplos + roda `go test` do pacote `internal/rules`
+
+Se preferir granular, há também o **workflow dedicado** de políticas: `.github/workflows/policy-qa.yml` (roda em mudanças sob `policies/**`, `internal/rules/**`, etc.)
+
+---
+
+### 📦 O que cada job faz
+
+- **Lint (golangci-lint)**  
+  Padrão de qualidade e estilo. Atualize a versão do linter no workflow quando necessário.
+
+- **Build**  
+  Gera binários:
+  - `bin/go-access-auditor` (server)
+  - `bin/go-access-agent` (agent)
+
+- **Tests**  
+  Executa testes de todas as pastas (`./...`) com **coverage**.
+
+- **Policy QA**  
+  - Compila o utilitário `rules-tester` (`tools/rules_tester.go`).
+  - Valida:
+    - `policies/rules.prudent.yaml` com `policies/examples/prudent.jsonl`
+    - `policies/rules.aggressive.yaml` com `policies/examples/aggressive.jsonl`
+    - `policies/rules.extended.yaml` com os exemplos do agressivo (como sanity check)
+  - Executa `go test` no pacote `internal/rules`.
+
+> Dica: mantenha **exemplos reais (anonimizados)** em `policies/examples/*.jsonl` para evitar regressões nas regex.
+
+---
+
+### 🧪 Rodando localmente (antes do PR)
+
+```bash
+# 1) Lint (instale o linter se ainda não tiver)
+golangci-lint run ./...
+
+# 2) Build rápido
+go build -o bin/auditor ./cmd/server
+go build -o bin/agent  ./cmd/agent
+
+# 3) Testes
+go test ./... -v -cover
+
+# 4) Validação de políticas
+make rules-validate-prudent
+make rules-validate-aggressive
+# opcional
+make rules-validate-extended
