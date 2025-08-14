@@ -1,0 +1,10 @@
+# PRUDENTE: só eventos com risco alto e comandos destrutivos óbvios
+- { name: "danger-rm-root",         regex: "(?i)\\brm\\s+-rf\\s+/(\\s|$)" }
+- { name: "chmod-777",              regex: "(?i)\\bchmod\\s+(-R\\s+)?777\\b" }
+- { name: "kubectl-delete-all",     regex: "(?i)\\bkubectl\\s+delete\\s+\\S+\\s+--all(\\s|$)" }
+- { name: "helm-uninstall-prd",     regex: "(?i)\\bhelm\\s+uninstall\\b.*\\b(-n|--namespace)\\s*(prod|production)\\b" }
+- { name: "drop-database",          regex: "(?i)\\bdrop\\s+database\\b" }
+- { name: "truncate-table",         regex: "(?i)\\btruncate\\s+table\\b" }
+- { name: "update-no-where",        regex: "(?i)\\bupdate\\s+\\S+\\s+set\\b(?!.*\\bwhere\\b)" }
+- { name: "delete-no-where",        regex: "(?i)\\bdelete\\s+from\\s+\\S+\\b(?!.*\\bwhere\\b)" }
+- { name: "passwd-root",            regex: "(?i)\\bpasswd\\s+root\\b" }
