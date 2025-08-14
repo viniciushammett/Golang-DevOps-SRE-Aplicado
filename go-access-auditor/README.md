@@ -24,8 +24,8 @@ go-access-auditor/
 
 Este repositório vem com uma esteira **Full CI** no GitHub Actions cobrindo **lint**, **build**, **testes**, e **QA de políticas (regex)**.
 
-[![Full CI](https://github.com/your-org/your-repo/actions/workflows/ci.yml/badge.svg)](.github/workflows/ci.yml)
-[![Policy QA](https://github.com/your-org/your-repo/actions/workflows/policy-qa.yml/badge.svg)](.github/workflows/policy-qa.yml)
+[![Full CI](https://github.com/viniciushammett/go-access-auditor/actions/workflows/ci.yml/badge.svg)](.github/workflows/ci.yml)
+[![Policy QA](https://github.com/viniciushammett/go-access-auditor/actions/workflows/policy-qa.yml/badge.svg)](.github/workflows/policy-qa.yml)
 
 > Ajuste `your-org/your-repo` para o caminho do seu repositório.
 
