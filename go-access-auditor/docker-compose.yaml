@@ -1,0 +1,29 @@
+version: "3.8"
+services:
+  auditor:
+    build: .
+    image: go-access-auditor:local
+    container_name: auditor
+    environment:
+      - CONFIG_PATH=/app/configs/config.yaml
+      - LOG_LEVEL=info
+    volumes:
+      - ./configs:/app/configs:ro
+      - ./data:/app/data
+    ports:
+      - "8080:8080"
+
+  prometheus:
+    image: prom/prometheus:v2.55.0
+    container_name: prometheus
+    ports: ["9090:9090"]
+    volumes:
+      - ./configs/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+    depends_on: [auditor]
+
+  grafana:
+    image: grafana/grafana:11.1.0
+    container_name: grafana
+    environment: [GF_SECURITY_ADMIN_PASSWORD=admin]
+    ports: ["3000:3000"]
+    depends_on: [prometheus]
