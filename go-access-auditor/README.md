@@ -2,6 +2,8 @@
 
 Auditoria centralizada de **acessos e comandos** (Linux/Kubernetes/DBs). Inclui **Agente**, **API/Coletor**, **Dashboard HTMX**, **Métricas Prometheus**, **Export CSV** e **alertas Slack** para comandos sensíveis.
 
+[![Full CI](https://github.com/viniciushammett/go-access-auditor/actions/workflows/ci.yml/badge.svg)](.github/workflows/ci.yml)
+
 ## Recursos
 - Agente envia eventos (stdin/linha de comando): `user@host`, `source`, `command`
 - API: `POST /v1/events`, `GET /v1/events`, `GET /v1/export.csv`, `GET /metrics`, `GET /`
@@ -24,7 +26,7 @@ go-access-auditor/
 
 Este repositório vem com uma esteira **Full CI** no GitHub Actions cobrindo **lint**, **build**, **testes**, e **QA de políticas (regex)**.
 
-[![Full CI](https://github.com/viniciushammett/go-access-auditor/actions/workflows/ci.yml/badge.svg)](.github/workflows/ci.yml)
+[![Full CI](https://github.com/viniciushammett/go-access-auditor//actions/workflows/ci.yml/badge.svg)](.github/workflows/ci.yml)
 [![Policy QA](https://github.com/viniciushammett/go-access-auditor/actions/workflows/policy-qa.yml/badge.svg)](.github/workflows/policy-qa.yml)
 
 > Ajuste `your-org/your-repo` para o caminho do seu repositório.
