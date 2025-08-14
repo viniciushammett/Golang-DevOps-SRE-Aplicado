@@ -2,9 +2,10 @@
 
 Auditoria centralizada de **acessos e comandos** (Linux/Kubernetes/DBs). Inclui **Agente**, **API/Coletor**, **Dashboard HTMX**, **Métricas Prometheus**, **Export CSV** e **alertas Slack** para comandos sensíveis.
 
-[![Full CI](https://github.com/viniciushammett/go-access-auditor/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/viniciushammett/go-access-auditor/actions/workflows/ci.yml)
-[![Policy QA](https://github.com/viniciushammett/go-access-auditor/actions/workflows/policy-qa.yml/badge.svg?branch=main)](https://github.com/viniciushammett/go-access-auditor/actions/workflows/policy-qa.yml)
-[![Release](https://github.com/viniciushammett/go-access-auditor/actions/workflows/release.yml/badge.svg?branch=main)](https://github.com/viniciushammett/go-access-auditor/actions/workflows/release.yml)
+[![Full CI](https://github.com/viniciushammett/go-access-auditor/actions/workflows/ci.yml/badge.svg)](.github/workflows/ci.yml)
+[![Policy QA](https://github.com/viniciushammett/go-access-auditor/actions/workflows/policy-qa.yml/badge.svg)](.github/workflows/policy-qa.yml)
+[![Release](https://github.com/viniciushammett/go-access-auditor/actions/workflows/release.yml/badge.svg)](.github/workflows/release.yml)
+
 
 ## Recursos
 - Agente envia eventos (stdin/linha de comando): `user@host`, `source`, `command`
