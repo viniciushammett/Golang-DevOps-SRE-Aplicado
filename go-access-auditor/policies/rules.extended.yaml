@@ -1,0 +1,30 @@
+### Para usar: inclua no configs/config.yaml (ou mescle) e reinicie o servidor.
+
+# Regras ampliadas por ferramenta / risco
+- { name: "danger-rm-root",         regex: "(?i)\\brm\\s+-rf\\s+/(\\s|$)" }
+- { name: "chmod-777",              regex: "(?i)\\bchmod\\s+(-R\\s+)?777\\b" }
+- { name: "chown-root-recursive",   regex: "(?i)\\bchown\\s+-R\\s+root:root\\b" }
+
+# kubectl
+- { name: "kubectl-delete-all",     regex: "(?i)\\bkubectl\\s+delete\\s+\\S+\\s+--all(\\s|$)" }
+- { name: "kubectl-drain-force",    regex: "(?i)\\bkubectl\\s+drain\\b.*\\b--force\\b" }
+- { name: "kubectl-apply-prd",      regex: "(?i)\\bkubectl\\s+apply\\b.*\\b-n\\s*(prod|production)\\b" }
+
+# helm
+- { name: "helm-upgrade-prd",       regex: "(?i)\\bhelm\\s+upgrade\\b.*\\b(-n|--namespace)\\s*(prod|production)\\b" }
+- { name: "helm-uninstall-prd",     regex: "(?i)\\bhelm\\s+uninstall\\b.*\\b(-n|--namespace)\\s*(prod|production)\\b" }
+
+# SQL
+- { name: "drop-database",          regex: "(?i)\\bdrop\\s+database\\b" }
+- { name: "drop-table",             regex: "(?i)\\bdrop\\s+table\\b" }
+- { name: "truncate-table",         regex: "(?i)\\btruncate\\s+table\\b" }
+- { name: "update-no-where",        regex: "(?i)\\bupdate\\s+\\S+\\s+set\\b(?!.*\\bwhere\\b)" }
+- { name: "delete-no-where",        regex: "(?i)\\bdelete\\s+from\\s+\\S+\\b(?!.*\\bwhere\\b)" }
+
+# Rede / firewall
+- { name: "iptables-flush",         regex: "(?i)\\biptables\\s+-F\\b" }
+- { name: "ufw-disable",            regex: "(?i)\\bufw\\s+disable\\b" }
+
+# Sistema
+- { name: "passwd-root",            regex: "(?i)\\bpasswd\\s+root\\b" }
+- { name: "sudoers-edit",           regex: "(?i)\\bvisudo\\b|/etc/sudoers" }
