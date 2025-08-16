@@ -4,37 +4,34 @@ import (
 	"context"
 	"encoding/json"
 	"net/http"
+	"os"
+	"path/filepath"
 	"strings"
 	"time"
 
 	"github.com/go-chi/chi/v5"
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/attribute"
+
 	"github.com/viniciushammett/go-log-anomaly-detector/internal/detector"
 	"github.com/viniciushammett/go-log-anomaly-detector/internal/logger"
 	"github.com/viniciushammett/go-log-anomaly-detector/internal/metrics"
 	"github.com/viniciushammett/go-log-anomaly-detector/internal/store"
 )
 
+var tracer = otel.Tracer("api")
+
 type Deps struct {
 	Log       *logger.Logger
 	Store     *store.Store
-	Ingest    *ingestWrapper
+	Ingest    func(source, msg string, meta map[string]string, ts time.Time)
 	Detector  *detector.Detector
 	AuthToken string
 }
 type Config struct{ Addr string }
-
-type ingestWrapper struct{ s func(source, msg string, meta map[string]string, ts time.Time) }
-
-func NewServer(d Deps, c Config) *Server {
-	return &Server{
-		d: Deps{
-			Log: d.Log, Store: d.Store, Detector: d.Detector, AuthToken: d.AuthToken,
-			Ingest: &ingestWrapper{s: d.Ingest},
-		}, c: c,
-	}
-}
-
 type Server struct{ d Deps; c Config }
+
+func NewServer(d Deps, c Config) *Server { return &Server{d: d, c: c} }
 
 func (s *Server) Run(ctx context.Context) error {
 	r := chi.NewRouter()
@@ -42,6 +39,14 @@ func (s *Server) Run(ctx context.Context) error {
 	r.Get("/metrics", func(w http.ResponseWriter, r *http.Request){ metrics.Handler().ServeHTTP(w,r) })
 	r.Post("/v1/logs", s.handleLogs)
 	r.Get("/v1/anomalies", s.handleList)
+
+	// Servir frontend compilado se existir ./frontend/dist
+	if stat, err := os.Stat("frontend/dist"); err == nil && stat.IsDir() {
+		fs := http.FileServer(http.Dir("frontend/dist"))
+		r.Handle("/ui/*", http.StripPrefix("/ui/", fs))
+		r.Handle("/ui", http.StripPrefix("/ui", fs))
+	}
+
 	srv := &http.Server{Addr: s.c.Addr, Handler: s.d.Log.HTTP(r)}
 	go func(){ <-ctx.Done(); _ = srv.Shutdown(context.Background()) }()
 	s.d.Log.Info().Str("addr", s.c.Addr).Msg("http listening")
@@ -62,6 +67,9 @@ type logPayload struct {
 }
 
 func (s *Server) handleLogs(w http.ResponseWriter, r *http.Request) {
+	ctx, span := tracer.Start(r.Context(), "POST /v1/logs")
+	defer span.End()
+
 	if !s.auth(r) { http.Error(w, "unauthorized", http.StatusUnauthorized); return }
 	var p logPayload
 	if err := json.NewDecoder(r.Body).Decode(&p); err != nil || p.Msg == "" {
@@ -69,12 +77,21 @@ func (s *Server) handleLogs(w http.ResponseWriter, r *http.Request) {
 	}
 	ts := time.Now()
 	if p.TS != nil { ts = *p.TS }
-	s.d.Ingest.s(p.Source, p.Msg, p.Meta, ts)
+
+	span.SetAttributes(
+		attribute.String("source", p.Source),
+		attribute.Int("meta_len", len(p.Meta)),
+	)
+
+	s.d.Ingest(p.Source, p.Msg, p.Meta, ts)
 	w.WriteHeader(http.StatusAccepted)
 	_, _ = w.Write([]byte("ok"))
 }
 
 func (s *Server) handleList(w http.ResponseWriter, r *http.Request) {
+	_, span := tracer.Start(r.Context(), "GET /v1/anomalies")
+	defer span.End()
+
 	arr, _ := s.d.Store.List(200)
 	w.Header().Set("Content-Type","application/json")
 	_ = json.NewEncoder(w).Encode(arr)
