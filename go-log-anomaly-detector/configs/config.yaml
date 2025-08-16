@@ -1,7 +1,27 @@
 server: { addr: ":8080" }
+
 storage: { path: "data/log-anomaly.db" }
-authToken: ""     # opcional p/ proteger /v1/logs
+
+authToken: ""
+
 rulesFile: "configs/rules.example.yaml"
+
+slack:
+  enabled: false
+  webhook: "https://hooks.slack.com/services/XXX/YYY/ZZZ"
+
+tracing:
+  enabled: true
+  serviceName: "go-log-anomaly-detector"
+  otlpEndpoint: "localhost:4317"     # Jaeger/Tempo OTLP gRPC
+  sampleRatio: 1.0                   # 0..1
+
+ml:
+  enabled: true
+  modelPath: "ml/model.stats.json"   # gerado pelo trainer.py
+  zScoreK: 3.0                       # limiar: count > mean + k*std
+  bucket: "1m"                       # granularidade para contagem
+
 
 slack:
   enabled: false
