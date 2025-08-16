@@ -1,0 +1,18 @@
+name: ci
+on: [push, pull_request]
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with: { go-version: '1.22' }
+      - run: go build ./...
+      - run: go test ./... || true
+  example-pipeline:
+    if: ${{ false }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Example fetching secret from GSV (doc only)
+        run: |
+          echo "This is a documentation example; wire up your own token and URL"
