@@ -1,0 +1,13 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: go-secret-vault
+  namespace: default
+spec:
+  selector:
+    app: go-secret-vault
+  ports:
+    - name: http
+      port: 80
+      targetPort: 8080
+  type: ClusterIP

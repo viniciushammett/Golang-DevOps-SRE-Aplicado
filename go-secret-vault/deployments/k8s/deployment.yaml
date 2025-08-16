@@ -1,0 +1,40 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: go-secret-vault
+  namespace: default
+spec:
+  replicas: 1
+  selector:
+    matchLabels: { app: go-secret-vault }
+  template:
+    metadata:
+      labels: { app: go-secret-vault }
+    spec:
+      containers:
+        - name: api
+          image: yourrepo/go-secret-vault:latest
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 8080
+          env:
+            - name: GSV_MASTER_KEY
+              valueFrom: { secretKeyRef: { name: gsv-secrets, key: GSV_MASTER_KEY } }
+            - name: GSV_JWT_SECRET
+              valueFrom: { secretKeyRef: { name: gsv-secrets, key: GSV_JWT_SECRET } }
+            - name: GSV_CONFIG
+              value: /etc/gsv/config.yaml
+          volumeMounts:
+            - name: cfg
+              mountPath: /etc/gsv
+            - name: data
+              mountPath: /data
+      volumes:
+        - name: cfg
+          configMap:
+            name: gsv-config
+            items:
+              - key: config.yaml
+                path: config.yaml
+        - name: data
+          emptyDir: {}

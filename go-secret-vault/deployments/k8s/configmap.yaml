@@ -1,0 +1,21 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: gsv-config
+  namespace: default
+data:
+  config.yaml: |
+    server:
+      addr: ":8080"
+      cors_origins: ["*"]
+    security:
+      master_key_b64: "${GSV_MASTER_KEY}"
+      jwt_secret_b64: "${GSV_JWT_SECRET}"
+    audit:
+      file: "/data/audit.log"
+    storage:
+      bolt_path: "/data/vault.db"
+    users:
+      - username: admin
+        password_bcrypt: "$2a$12$3uMsqTqv8m6v1Q8lT3eI1u3Q9g8y9lF2f4B7LxUq3c1kQ7z2A9bIO"
+        roles: ["admin"]
