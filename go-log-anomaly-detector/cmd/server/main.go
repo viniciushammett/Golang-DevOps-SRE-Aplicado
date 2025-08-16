@@ -85,7 +85,7 @@ func main() {
 	det := detector.New(log, db, ruleSet, notifier, mlDet)
 
 	// Ingest
-	ing := ingest.New(det)
+	ing := ingest.New(det, db)
 
 	// API
 	srv := api.NewServer(api.Deps{
