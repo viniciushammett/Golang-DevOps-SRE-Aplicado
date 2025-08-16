@@ -1,0 +1,15 @@
+version: "3.9"
+services:
+  api:
+    build: ..
+    environment:
+      - GSV_MASTER_KEY=${GSV_MASTER_KEY}
+      - GSV_JWT_SECRET=${GSV_JWT_SECRET}
+      - GSV_CONFIG=/configs/config.yaml
+    volumes:
+      - ../configs/config.yaml:/configs/config.yaml:ro
+      - gsv-data:/data
+    ports:
+      - "8080:8080"
+volumes:
+  gsv-data: {}
