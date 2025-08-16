@@ -48,6 +48,8 @@ Cada projeto é **100% funcional**, com código aberto, documentação e exemplo
 | 🚀 **Go Deploy Orchestrator** | Orquestrador de deploys e rollback automático para Kubernetes com integração CI/CD. | API + CLI, canary e blue-green, thresholds Prometheus, histórico e aprovações manuais. | [📄 Leia mais](./go-deploy-orchestrator/README.md) |
 | 🛡 **Go Access Auditor** | Auditoria centralizada de acessos e comandos em ambientes críticos (Linux, Kubernetes, DBs). | Agente + API + Dashboard, alertas para comandos sensíveis, métricas Prometheus e relatórios CSV/PDF. | [📄 Leia mais](./go-access-auditor/README.md) |
 | 🤖 **Go Log Anomaly Detector** | Pipeline em Go com tracing **OpenTelemetry**, detecção de anomalias com **ML** e **frontend React** para visualização em tempo real. | CI/CD com workflows de **MLOps**, suporte a Prometheus/Grafana e deploy em Docker Compose. | [📄 Leia mais](./go-log-anomaly-detector/README.md) |
+| 🔐 **Go Secret Vault** | Cofre seguro de segredos em **Go**, inspirado no HashiCorp Vault, com **AES-256**, API REST + CLI e autenticação **JWT**. | Suporte a **TTL**, audit logging, exportação para **Kubernetes Secrets**, frontend **React** e integração em CI/CD. | [📄 Leia mais](./go-secret-vault/README.md) |
+
 
 ---
 
