@@ -1,131 +1,135 @@
-# 🔍 Go Log Anomaly Detector
+# 🤖 Go Log Anomaly Detector
 
-Serviço em **Golang** para **detecção de anomalias em logs em tempo real**, aplicando regras configuráveis em YAML.  
-Recebe logs via API, Kafka ou leitura de arquivos locais, e emite alertas para múltiplos canais (Slack, Discord, Webhook, Email).  
-
-Inclui suporte a métricas Prometheus, dashboards Grafana, auditoria em banco de dados e execução containerizada.  
+Pipeline de logs em Go com **detecção de anomalias via Machine Learning, tracing OpenTelemetry** e **frontend React** para visualização em tempo real.
+Um projeto hands-on para aprender **observabilidade, MLOps e DevOps moderno.**
 
 ---
 
-## 🚀 Funcionalidades
+## ✨ Funcionalidades
 
-- 📥 **Ingestão de logs** via:
-  - HTTP API (`/ingest`)
-  - Streams Kafka
-  - Arquivos locais (tailing)
-- 📜 **Regras configuráveis em YAML**:
-  - Expressões regulares
-  - Threshold de ocorrências em janelas de tempo
-  - Severidade (info, warn, critical)
-- ⚠️ **Alertas automáticos** para:
-  - Slack
-  - Discord
-  - Webhook genérico
-  - Email (SMTP)
-- 📊 **Observabilidade nativa**:
-  - Métricas em `/metrics` (Prometheus)
-  - Healthcheck em `/healthz`
-  - Dashboard Grafana pronto
-- 🗄️ **Persistência**:
-  - SQLite para auditoria local
-  - PostgreSQL opcional para produção
-- 🐳 **Deploy facilitado**:
-  - Dockerfile
-  - docker-compose
-  - Manifests Kubernetes
+- 🔄 Ingestão de logs em JSON/NDJSON.
+- 📏 Regras customizadas (regex, thresholds, etc).
+- 🚨 Alertas por Slack, Email ou Webhook.
+- 📊 Métricas Prometheus expostas no /metrics.
+- 🛰 Tracing distribuído via OpenTelemetry.
+- 🧠 Detecção automática de anomalias com ML.
+- 🌐 Frontend React para dashboards em tempo real.
+- ⚙️ Deploy pronto para Docker Compose e Kubernetes.  
 
 ---
 
 ## 📂 Estrutura do Projeto
 
-```bash
-go-log-anomaly-detector/
-├── cmd/                   # Entrypoints (API/worker)
-│   └── main.go
-├── internal/              # Lógica principal
-│   ├── ingest/            # Consumo de logs (API, Kafka, File)
-│   ├── rules/             # Engine de regras YAML
-│   ├── alerts/            # Slack, Discord, Email, Webhook
-│   ├── storage/           # Persistência (SQLite/Postgres)
-│   └── metrics/           # Exposição Prometheus/Healthz
+```plaintext
+o-log-anomaly-detector/
+├── cmd/                  # Entrypoints CLI/API
+├── internal/
+│   ├── ingest/           # Ingestão de logs
+│   ├── rules/            # Regras customizadas
+│   ├── alerts/           # Notificações
+│   ├── storage/          # Persistência BoltDB
+│   ├── metrics/          # Exposição Prometheus
+│   └── tracing/          # OpenTelemetry
+├── ml/
+│   ├── trainer.py        # Treino do modelo ML
+│   ├── detector.go       # Inferência Go
+│   └── model.stats.json  # Modelo salvo
+├── frontend/             # WebApp React
+│   ├── src/
+│   └── package.json
 ├── configs/
-│   ├── config.yaml        # Configuração geral
-│   └── rules.yaml         # Regras de detecção
+│   ├── config.yaml
+│   └── grafana-dashboard.json
 ├── deployments/
 │   ├── docker-compose.yaml
-│   
-├── dashboards/
-│   └── grafana.json       # Dashboard de métricas/anomalias
 └── README.md
 ```
 ##
-### ⚙️ Exemplo de Configuração
-`config.yaml`
-```yaml
-server:
-  port: 8080
-
-ingestion:
-  kafka:
-    brokers: ["localhost:9092"]
-    topic: "logs"
-  file:
-    path: "/var/log/app.log"
-
-alerts:
-  slack:
-    webhook_url: "https://hooks.slack.com/services/XXX/YYY/ZZZ"
-  email:
-    smtp: "smtp.gmail.com:587"
-    user: "alerts@company.com"
-    pass: "supersecret"
-    to: ["devops@company.com"]
+### 🚀 Como rodar
+**Backend Go**
+```bash
+go run ./cmd/server/main.go --config ./configs/config.yaml
 ```
-`rules.yaml`
-```yaml
-rules:
-  - name: "Erro crítico no sistema"
-    regex: "CRITICAL|FATAL"
-    threshold: 1
-    window: "1m"
-    severity: "critical"
+**Frontend React**
+```bash
+cd frontend
+npm install
+npm run dev
 
-  - name: "Múltiplas falhas de login"
-    regex: "login failed"
-    threshold: 5
-    window: "10m"
-    severity: "warn"
 ```
 ##
-### ▶️ Execução
-**Via Go**
+### 📊 Observabilidade (OpenTelemetry)
+🔎 **Tracing com OpenTelemetry**
+- Ativado em todas as etapas de ingestão e regras.
+- Exportador padrão: OTLP gRPC.
+- Pode ser integrado com Jaeger, Tempo ou Grafana Cloud.
+##
+### 📈 Métricas Prometheus
+- Expostas no endpoint: http://localhost:8080/metrics
+- Dashboard pronto em configs/grafana-dashboard.json.
+##
+### 🧠 Machine Learning
+- `trainer.py` → treina modelos em batch (Isolation Forest).
+- Input: `ml/logs.csv` (extraído da base BoltDB).
+- Output: `ml/model.stats.json` com thresholds e pesos.
+- Inferência em tempo real feita pelo `detector.go`.
+
+Treinar Manualmente
 ```bash
-go run cmd/main.go --config configs/config.yaml
+python3 ml/trainer.py --input ml/logs.csv --output ml/model.stats.json
 ```
-**Via Docker**
+##
+### 🌐 Frontend Web (React)
+- Visualização de logs em tempo real (via SSE/WS).
+- Lista de anomalias detectadas.
+- Dashboard com métricas (latência, taxa de erro, outliers).
+- Construído com Vite + React + Tailwind + Recharts.
+
+Rodar localmente:
 ```bash
-docker build -t go-log-anomaly-detector .
-docker run -p 8080:8080 go-log-anomaly-detector
+cd frontend
+npm install
+npm run dev
 ```
-**Via Docker Compose**
+##
+### 📤 Exportador de Logs
+O utilitário `tools/export_logs_csv.go` gera CSV para treino:
+```bash
+make export-logs
+# gera ml/logs.csv
+```
+Estrutura do CSV:
+```bash
+ts,source,msg
+2025-08-15T10:00:00Z,app-1,"erro crítico: conexão perdida"
+```
+##
+### ⚙️ CI/CD e Automação
+O projeto vem com pipelines GitHub Actions prontos para build, testes e MLOps.
+
+### 🔄 Treino Automático + Manual (`ml-train.yml`)
+- Executa diariamente às **03h (BRT)** ou sob demanda.
+- Exporta logs → `ml/logs.csv.`
+- Roda o `trainer.py` e gera `ml/model.stats.json.`
+- Publica artefato e abre **PR automático** com o modelo.
+##
+### ✅ Validação de Dataset em PRs (`ml-validate-dataset.yml`)
+- Dispara em mudanças no `ml/logs.csv` ou `ml/trainer.py.`
+- Roda `trainer.py` para validar consistência.
+- Gera modelo temporário como artefato.
+- Evita merges com datasets inválidos.
+##
+### 📌 Resumo:
+- `ml-train.yml` mantém o modelo sempre atualizado.
+- `ml-validate-dataset.yml` protege a qualidade do dataset.
+- Ambos garantem confiabilidade no pipeline de ML.
+##
+### 📦 Deploy
+**Docker Compose**
 ```bash
 docker-compose up -d
 ```
 ##
-### 📊 Observabilidade
-- **Métricas Prometheus →** http://localhost:8080/metrics
-- **Healthcheck →** http://localhost:8080/healthz
-- **Dashboard Grafana →** importe `dashboards/grafana.json`
-##
-### 🔄 Fluxo de Trabalho
-1) Logs são recebidos via API/Kafka/File.
-2) Engine de regras aplica regex + thresholds em janelas de tempo.
-3) Quando regra é acionada → alerta é disparado.
-4) Evento é persistido no banco (SQLite/Postgres).
-5) Métricas são expostas para Prometheus/Grafana.
-##
-### 🧪 CI/CD
-- **Lint & Testes:** GolangCI-Lint + Go test
-- **Build:** Docker + multi-stage build
-- **Policy QA:** validação YAML de regras
-- **Release:** tags automáticas com GitHub Actions
+### 📜 Licença
+
+MIT © 2025
