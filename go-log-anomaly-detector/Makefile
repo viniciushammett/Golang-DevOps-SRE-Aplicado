@@ -19,3 +19,20 @@ logs: ; docker compose logs -f lad
 
 send:
 	bash examples/send_sample.sh
+
+TOOLS_BIN ?= bin
+
+# build do exportador
+build-export:
+	@mkdir -p $(TOOLS_BIN)
+	go build -o $(TOOLS_BIN)/export-logs ./tools/export_logs_csv.go
+
+# exporta logs do BoltDB atual para CSV
+export-logs: build-export
+	./$(TOOLS_BIN)/export-logs -db data/log-anomaly.db -out ml/logs.csv
+	@echo "CSV pronto em ml/logs.csv"
+
+# fluxo completo de treino (gera stats do modelo)
+train-ml: export-logs
+	python ml/trainer.py --input ml/logs.csv --output ml/model.stats.json
+	@echo "Modelo atualizado em ml/model.stats.json"
