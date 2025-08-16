@@ -1,0 +1,18 @@
+# Regras básicas (regex + janela + threshold)
+- name: "many-5xx"
+  pattern: "(?i)\\bstatus[:= ]?5\\d\\d\\b|\\bHTTP/1\\.[01]\" 5\\d\\d\\b"
+  window: "1m"
+  minCount: 20
+  severity: "critical"
+
+- name: "login-failed-burst"
+  pattern: "(?i)login failed|authentication failure|invalid password"
+  window: "2m"
+  minCount: 10
+  severity: "warn"
+
+- name: "sql-errors"
+  pattern: "(?i)syntax error|deadlock detected|violates unique constraint"
+  window: "1m"
+  minCount: 5
+  severity: "warn"
