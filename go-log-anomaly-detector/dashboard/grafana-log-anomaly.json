@@ -1,0 +1,16 @@
+{
+  "title": "Go Log Anomaly Detector",
+  "uid": "lad-main",
+  "schemaVersion": 39,
+  "style": "dark",
+  "time": { "from": "now-1h", "to": "now" },
+  "refresh": "10s",
+  "panels": [
+    { "type":"stat","title":"Logs (5m)","id":1,"gridPos":{"h":4,"w":8,"x":0,"y":0},
+      "targets":[{"expr":"sum(increase(lad_logs_ingested_total[5m]))","refId":"A"}] },
+    { "type":"stat","title":"Anomalias (5m)","id":2,"gridPos":{"h":4,"w":8,"x":8,"y":0},
+      "targets":[{"expr":"sum(increase(lad_anomalies_total[5m]))","refId":"A"}] },
+    { "type":"timeseries","title":"Eventos por regra (janela)","id":3,"gridPos":{"h":8,"w":24,"x":0,"y":4},
+      "targets":[{"expr":"lad_window_count","legendFormat":"{{rule}}","refId":"A"}] }
+  ]
+}
