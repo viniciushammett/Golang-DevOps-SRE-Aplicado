@@ -1,0 +1,95 @@
+name: ML Train (Export + Trainer + PR)
+
+on:
+  workflow_dispatch:
+    inputs:
+      db_path:
+        description: 'Caminho do BoltDB (ex: data/log-anomaly.db)'
+        required: false
+        default: 'data/log-anomaly.db'
+      out_csv:
+        description: 'Caminho do CSV de saída'
+        required: false
+        default: 'ml/logs.csv'
+      out_model:
+        description: 'Caminho do modelo de saída'
+        required: false
+        default: 'ml/model.stats.json'
+  schedule:
+    # 06:00 UTC ≈ 03:00 em America/Sao_Paulo (sem DST)
+    - cron: '0 6 * * *'
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  train:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.22.x'
+          cache: true
+
+      - name: Build exporter
+        run: |
+          mkdir -p bin
+          go build -o bin/export-logs ./tools/export_logs_csv.go
+
+      - name: Export logs → CSV
+        id: export
+        env:
+          DB_PATH: ${{ inputs.db_path || 'data/log-anomaly.db' }}
+          OUT_CSV: ${{ inputs.out_csv   || 'ml/logs.csv' }}
+        run: |
+          if [ ! -f "$DB_PATH" ]; then
+            echo "⚠️ DB não encontrado em $DB_PATH. Pulando export (workflow continuará para manter histórico)."
+            echo "skipped=true" >> $GITHUB_OUTPUT
+            exit 0
+          fi
+          mkdir -p "$(dirname "$OUT_CSV")"
+          ./bin/export-logs -db "$DB_PATH" -out "$OUT_CSV"
+          echo "skipped=false" >> $GITHUB_OUTPUT
+
+      - name: Setup Python
+        if: steps.export.outputs.skipped == 'false'
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+
+      - name: Train model (trainer.py)
+        if: steps.export.outputs.skipped == 'false'
+        env:
+          OUT_CSV: ${{ inputs.out_csv   || 'ml/logs.csv' }}
+          OUT_MDL: ${{ inputs.out_model || 'ml/model.stats.json' }}
+        run: |
+          python ml/trainer.py --input "$OUT_CSV" --output "$OUT_MDL"
+
+      - name: Upload model artifact
+        if: steps.export.outputs.skipped == 'false'
+        uses: actions/upload-artifact@v4
+        with:
+          name: ml-model
+          path: ${{ inputs.out_model || 'ml/model.stats.json' }}
+
+      - name: Create PR with updated model
+        if: steps.export.outputs.skipped == 'false'
+        uses: peter-evans/create-pull-request@v6
+        with:
+          commit-message: "chore(ml): update model.stats.json"
+          title: "ML: Update model stats"
+          body: |
+            Atualiza `ml/model.stats.json` com base nos logs exportados automaticamente.
+            - Fonte: `${{ inputs.db_path || 'data/log-anomaly.db' }}`
+            - CSV: `${{ inputs.out_csv || 'ml/logs.csv' }}`
+          branch: ml-model
+          add-paths: |
+            ml/model.stats.json
+            ml/logs.csv
