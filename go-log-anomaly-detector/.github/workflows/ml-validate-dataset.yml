@@ -1,0 +1,38 @@
+name: ML Dataset Validation (trainer)
+
+on:
+  pull_request:
+    branches: [ main, master ]
+    paths:
+      - 'ml/logs.csv'
+      - 'ml/trainer.py'
+      - '.github/workflows/ml-validate-dataset.yml'
+  workflow_dispatch: {}
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+
+      - name: Validate dataset with trainer
+        run: |
+          if [ ! -f ml/logs.csv ]; then
+            echo "ml/logs.csv não encontrado no PR."
+            exit 1
+          fi
+          python ml/trainer.py --input ml/logs.csv --output ml/model.stats.json
+
+      - name: Upload generated model
+        uses: actions/upload-artifact@v4
+        with:
+          name: pr-ml-model
+          path: ml/model.stats.json
