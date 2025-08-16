@@ -47,10 +47,10 @@ func (s *Server) Run(ctx context.Context) error {
 		r.Handle("/ui", http.StripPrefix("/ui", fs))
 	}
 
-	srv := &http.Server{Addr: s.c.Addr, Handler: s.d.Log.HTTP(r)}
-	go func(){ <-ctx.Done(); _ = srv.Shutdown(context.Background()) }()
-	s.d.Log.Info().Str("addr", s.c.Addr).Msg("http listening")
-	return srv.ListenAndServe()
+	srv := api.NewServer(api.Deps{
+  Log: log, Store: db, Ingest: ing.Submit, Detector: det, AuthToken: cfg.AuthToken,
+}, api.Config{Addr: cfg.Server.Addr})
+
 }
 
 func (s *Server) auth(r *http.Request) bool {
