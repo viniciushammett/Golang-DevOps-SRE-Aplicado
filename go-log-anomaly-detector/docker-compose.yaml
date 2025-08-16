@@ -1,0 +1,26 @@
+version: "3.8"
+services:
+  lad:
+    build: .
+    image: go-log-anomaly-detector:local
+    container_name: lad
+    environment:
+      - CONFIG_PATH=/app/configs/config.yaml
+      - LOG_LEVEL=info
+    volumes:
+      - ./configs:/app/configs:ro
+      - ./data:/app/data
+    ports: ["8080:8080"]
+
+  prometheus:
+    image: prom/prometheus:v2.55.0
+    ports: ["9090:9090"]
+    volumes:
+      - ./configs/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+    depends_on: [lad]
+
+  grafana:
+    image: grafana/grafana:11.1.0
+    environment: [GF_SECURITY_ADMIN_PASSWORD=admin]
+    ports: ["3000:3000"]
+    depends_on: [prometheus]
