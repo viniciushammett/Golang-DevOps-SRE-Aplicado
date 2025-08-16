@@ -1,0 +1,17 @@
+server: { addr: ":8080" }
+storage: { path: "data/log-anomaly.db" }
+authToken: ""     # opcional p/ proteger /v1/logs
+rulesFile: "configs/rules.example.yaml"
+
+slack:
+  enabled: false
+  webhook: "https://hooks.slack.com/services/XXX/YYY/ZZZ"
+
+// This file is used to configure the Go Log Anomaly Detector.
+// It contains settings for the server, storage, authentication, rules, and Slack notifications.
+// The server listens on port 8080 by default.
+// The storage path is set to "data/log-anomaly.db".
+// An optional authentication token can be provided to protect the /v1/logs endpoint.
+// The rules file is specified as "configs/rules.example.yaml".
+// Slack notifications can be enabled by setting 'enabled' to true and providing a valid webhook URL.
+// If Slack notifications are not needed, 'enabled' should remain false and the webhook can be left empty.  
