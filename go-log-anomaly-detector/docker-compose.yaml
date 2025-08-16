@@ -10,7 +10,9 @@ services:
     volumes:
       - ./configs:/app/configs:ro
       - ./data:/app/data
+      - ./frontend/dist:/app/frontend/dist:ro
     ports: ["8080:8080"]
+    depends_on: [jaeger]
 
   prometheus:
     image: prom/prometheus:v2.55.0
@@ -24,3 +26,11 @@ services:
     environment: [GF_SECURITY_ADMIN_PASSWORD=admin]
     ports: ["3000:3000"]
     depends_on: [prometheus]
+  
+  jaeger:
+    image: jaegertracing/all-in-one:1.47
+    environment:
+      - COLLECTOR_ZIPKIN_HTTP_PORT=9411
+    ports:
+      - "16686:16686"   # UI
+      - "4317:4317"     # OTLP gRPC
