@@ -2,7 +2,7 @@
   <h1>🚀 Golang para DevOps/SRE Aplicado </h1>
   <p>Repositório de estudos e projetos práticos em <strong>Golang</strong> voltados para <strong>DevOps</strong> e <strong>SRE</strong>, aplicando conceitos reais de monitoramento, observabilidade e automação — com o diferencial de <strong>criar ferramentas próprias</strong>, mesmo diante de diversas soluções prontas no mercado.</p>
   
-  <img src="https://media.licdn.com/dms/image/v2/D4D22AQE9bJuBORjFIA/feedshare-shrink_1280/B4DZiQOn2yHYAk-/0/1754766409578?e=1758758400&v=beta&t=rQ6b5O5o3K5Qe1em5rYFEZyjDMYx1jsP1_c-RBwt980" width="700"/>
+  <img src="image.png" width="700"/>
   
   <!-- Badges -->
   <p>
