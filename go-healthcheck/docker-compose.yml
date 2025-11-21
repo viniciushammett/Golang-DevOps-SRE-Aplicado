@@ -1,0 +1,39 @@
+services:
+  healthchecker:
+    image: healthchecker:2.0
+    container_name: healthchecker
+    command: >
+      -interactive=false
+      -url=https://www.google.com
+      -timeout=3
+      -metrics=true
+      -interval=10
+      -listen=:8080
+    ports:
+      - "8080:8080"
+    networks:
+      - observability
+
+  prometheus:
+    image: prom/prometheus:v2.55.0
+    container_name: prometheus
+    volumes:
+      - ./prometheus.yml:/etc/prometheus/prometheus.yml
+    command:
+      - "--config.file=/etc/prometheus/prometheus.yml"
+    ports:
+      - "9090:9090"
+    networks:
+      - observability
+
+  grafana:
+    image: grafana/grafana:11.1.0
+    container_name: grafana
+    ports:
+      - "3000:3000"
+    networks:
+      - observability
+
+networks:
+  observability:
+    driver: bridge
