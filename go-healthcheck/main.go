@@ -1,139 +1,109 @@
 package main
 
 import (
+	"bufio"
 	"encoding/json"
 	"flag"
 	"fmt"
-	"net/http"
-	urlpkg "net/url"
 	"os"
+	"strconv"
 	"strings"
-	"sync"
 	"time"
 )
 
 func main() {
-	// Flags
-	urlsFlag := flag.String("urls", "https://example.com", "Lista de URLs separadas por vírgula")
-	retries := flag.Int("retries", 0, "Número de tentativas extras em caso de falha")
-	asJSON := flag.Bool("json", false, "Imprime saída em JSON (uma linha por URL)")
-	concurrency := flag.Int("concurrency", 5, "Número máximo de checagens em paralelo")
+	urlFlag := flag.String("url", "Endereço ou Site", "URL para healthcheck")
+	timeoutFlag := flag.Int("timeout", 3, "timeout em segundos")
+	outFlag := flag.String("out", "health.json", "arquivo de saída JSON")
+	interactive := flag.Bool("interactive", true, "habilita perguntas interativas no terminal")
+	metricsMode := flag.Bool("metrics", false, "ativa modo servidor de métricas para Prometheus")
+	intervalFlag := flag.Int("interval", 15, "intervalo entre checks (segundos) no modo métricas")
+	listenFlag := flag.String("listen", ":8080", "endereço/porta para expor /metrics")
+
 	flag.Parse()
 
-	// Parse simples da lista de URLs
-	raw := strings.Split(*urlsFlag, ",")
-	var urls []string
-	for _, s := range raw {
-		u := strings.TrimSpace(s)
-		if u != "" {
-			urls = append(urls, u)
+	url := *urlFlag
+	timeout := *timeoutFlag
+	out := *outFlag
+
+	// --- Modo servidor de métricas (Prometheus) ---
+	if *metricsMode {
+		fmt.Println("Iniciando em modo servidor de métricas (Prometheus)...")
+		startMetricsServer(url, timeout, time.Duration(*intervalFlag)*time.Second, *listenFlag)
+		return
+	}
+
+	if *interactive {
+		reader := bufio.NewReader(os.Stdin)
+
+		fmt.Printf("URL para healthcheck [%s]: ", url)
+		if input, _ := reader.ReadString('\n'); s(input) != "" {
+			url = s(input)
 		}
-	}
-	if len(urls) == 0 {
-		fmt.Fprintln(os.Stderr, "uso: go run . -urls https://a.com,https://b.com")
-		os.Exit(2)
-	}
 
-	// Validação de cada URL
-	for _, u := range urls {
-		pu, err := urlpkg.ParseRequestURI(u)
-		if err != nil || (pu.Scheme != "http" && pu.Scheme != "https") {
-			fmt.Fprintln(os.Stderr, "URL inválida:", u, "(use http(s)://)")
-			os.Exit(2)
-		}
-	}
-
-	// HTTP client com timeout fixo (pode virar flag depois)
-	client := http.Client{Timeout: 3 * time.Second}
-
-	// Uma tentativa de checagem
-	checkOnce := func(target string) (status int, ms int64, up bool, err error) {
-		start := time.Now()
-		resp, err := client.Get(target)
-		ms = time.Since(start).Milliseconds()
-		if err != nil {
-			return 0, ms, false, err
-		}
-		defer resp.Body.Close()
-
-		up = resp.StatusCode >= 200 && resp.StatusCode < 400
-		return resp.StatusCode, ms, up, nil
-	}
-
-	// Estrutura de resultado (para -json)
-	type Result struct {
-		URL    string `json:"url"`
-		Status int    `json:"status"`
-		MS     int64  `json:"ms"`
-		UP     bool   `json:"up"`
-		Error  string `json:"error,omitempty"`
-	}
-
-	results := make(chan Result)              // canal para coletar resultados
-	sem := make(chan struct{}, *concurrency)  // semáforo de concorrência
-	var wg sync.WaitGroup
-
-	// Dispara uma goroutine por URL
-	for _, u := range urls {
-		u := u // captura
-		wg.Add(1)
-
-		go func() {
-			defer wg.Done()
-
-			// ocupar vaga do semáforo
-			sem <- struct{}{}
-			defer func() { <-sem }() // liberar vaga quando terminar
-
-			var status int
-			var ms int64
-			var up bool
-			var err error
-
-			for attempt := 0; attempt <= *retries; attempt++ {
-				status, ms, up, err = checkOnce(u)
-				if err == nil && up {
-					break
-				}
-				if attempt < *retries {
-					time.Sleep(time.Duration(200*(attempt+1)) * time.Millisecond)
-				}
-			}
-
-			r := Result{URL: u, Status: status, MS: ms, UP: up}
-			if err != nil && !up {
-				r.Error = err.Error()
-			}
-			results <- r
-		}()
-	}
-
-	// Fecha o canal quando todas terminarem
-	go func() {
-		wg.Wait()
-		close(results)
-	}()
-
-	exitCode := 0
-	// Consome resultados conforme ficam prontos (ordem pode variar)
-	for r := range results {
-		if *asJSON {
-			_ = json.NewEncoder(os.Stdout).Encode(r)
-		} else {
-			if r.UP {
-				fmt.Printf("[%s] UP %d em %dms\n", r.URL, r.Status, r.MS)
+		fmt.Printf("Timeout em segundos [%d]: ", timeout)
+		if input, _ := reader.ReadString('\n'); s(input) != "" {
+			if v, err := strconv.Atoi(s(input)); err == nil && v > 0 {
+				timeout = v
 			} else {
-				if r.Error != "" {
-					fmt.Printf("[%s] DOWN (erro) em %dms: %s\n", r.URL, r.MS, r.Error)
-				} else {
-					fmt.Printf("[%s] DOWN %d em %dms\n", r.URL, r.Status, r.MS)
-				}
+				fmt.Println("Timeout inválido, mantendo padrão.")
 			}
 		}
-		if !r.UP {
-			exitCode = 1
+
+		fmt.Printf("Arquivo de saída JSON [%s]: ", out)
+		if input, _ := reader.ReadString('\n'); s(input) != "" {
+			out = s(input)
 		}
 	}
 
-	os.Exit(exitCode)
+	// Garantir protocolo
+	if !strings.HasPrefix(url, "http://") && !strings.HasPrefix(url, "https://") {
+		url = "https://" + url
+	}
+
+	res, err := checkHTTP(url, timeout)
+	if err != nil {
+		fmt.Printf("Falha ao checar %s: %v\n", url, err)
+	} else if res.Status == "UP" {
+		fmt.Printf("%s saudável! (status %d, %dms)\n", res.URL, res.Code, res.ElapsedMS)
+	} else {
+		fmt.Printf("%s com problemas (status %d, %dms)\n", res.URL, res.Code, res.ElapsedMS)
+	}
+
+	// --- Append de JSON sem sobrescrever ---
+	saveJSONAppend(out, res)
+}
+
+// Remove espaços e quebra de linha
+func s(v string) string {
+	return strings.TrimSpace(v)
+}
+
+// -----------------
+// Função que faz append no JSON
+// -----------------
+func saveJSONAppend(filename string, newItem *HealthResult) {
+	var list []HealthResult
+
+	// Se arquivo já existe, carregar conteúdo
+	if data, err := os.ReadFile(filename); err == nil {
+		_ = json.Unmarshal(data, &list)
+	}
+
+	// Adicionar novo item
+	list = append(list, *newItem)
+
+	// Regravar tudo formatado
+	data, err := json.MarshalIndent(list, "", "  ")
+	if err != nil {
+		fmt.Println("erro gerando JSON:", err)
+		return
+	}
+
+	if err := os.WriteFile(filename, data, 0o644); err != nil {
+		fmt.Println("erro salvando JSON:", err)
+		return
+	}
+
+	fmt.Println("Resultado adicionado em", filename)
 }
