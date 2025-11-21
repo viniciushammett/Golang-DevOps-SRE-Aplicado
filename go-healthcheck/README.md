@@ -1,133 +1,277 @@
-<div align="center">
-  <h1>🔎 HTTP Healthchecker (CLI)</h1>
-  <p>Ferramenta de linha de comando em <b>Go</b> para checar a saúde de múltiplas URLs com concorrência, retries e saída JSON opcional</p>
-  <img src="https://img.shields.io/badge/platform-linux%20%7C%20macos%20%7C%20windows-lightgrey?style=flat-square" />
-</div>
+# 🔎 HTTP Healthchecker & Prometheus Exporter  
+> Monitoramento simples, poderoso e educativo — escrito em Go.
+
+<p align="center">
+  <img src="https://img.shields.io/badge/Language-Go-blue?style=for-the-badge" />
+  <img src="https://img.shields.io/badge/Observability-Prometheus%20%7C%20Grafana-orange?style=for-the-badge" />
+  <img src="https://img.shields.io/badge/Runs-Docker%20%7C%20Baremetal-lightgrey?style=for-the-badge" />
+  <img src="https://img.shields.io/badge/Mode-CLI%20%7C%20Exporter-green?style=for-the-badge" />
+</p>
 
 ---
 
-## 📖 Descrição
-
-O **HTTP Healthchecker (CLI)** executa requisições HTTP/HTTPS para uma ou mais URLs, determina **UP/DOWN** (2xx/3xx = UP), mede **latência** (ms) e pode imprimir **JSON** por linha (NDJSON), ideal para **scripts**, **CI/CD** e **observabilidade leve**.
-
-✨ Diferente de um exporter, **ele roda, imprime e finaliza** — perfeito para cronjobs e pipelines.
+# 📚 Sumário
+- [📖 Visão Geral](#-visão-geral)
+- [🚀 Uso local (sem Docker)](#-uso-local-sem-docker)
+  - [1️⃣ Clonar e Compilar](#1️⃣-clonar-e-compilar)
+  - [2️⃣ Modo CLI Interativo](#2️⃣-modo-cli-interativo)
+  - [3️⃣ Modo CLI Não Interativo](#3️⃣-modo-cli-não-interativo)
+  - [4️⃣ Estrutura do JSON](#4️⃣-estrutura-do-json)
+- [🔧 Flags Disponíveis](#-flags-disponíveis)
+- [🧠 Arquitetura Interna](#-arquitetura-interna)
+  - [health.go](#healthgo)
+  - [metrics.go](#metricsgo)
+- [🐳 Docker](#-docker)
+- [📊 Stack Completa: Prometheus + Grafana](#-stack-completa-prometheus--grafana)
+  - [Configuração do Grafana](#configuração-do-grafana)
+  - [Painéis Prontos](#painéis-prontos)
+- [✨ Roadmap Evolutivo](#-roadmap-evolutivo)
+- [📄 Licença](#-licença)
 
 ---
 
-## ✨ Recursos
+# 📖 Visão Geral
 
-- ✅ Lista de URLs via `-urls` (separadas por vírgula)
-- ⚡ Concorrência configurável (`-concurrency`)
-- 🔁 Retries com backoff linear
-- 🧾 Saída humana **ou** JSON por linha (`-json`)
-- ⏱️ Timeout por request (fixo no código: 3s)
-- 🧹 Exit code: `0` se todas UP, `1` se alguma falhar, `2` uso inválido
+Este projeto demonstra, de forma clara e prática, como criar uma cadeia completa de observabilidade:
+
+> **Go → Healthcheck → JSON → Prometheus → Grafana → Docker**
+
+Com ele você aprende:
+
+- Como implementar healthchecks reais  
+- Como expor métricas customizadas  
+- Como montar uma stack completa de observabilidade  
+- Como integrar tudo com Docker, Prometheus e Grafana  
+- Como transformar um simples programa Go em um **exporter profissional**
 
 ---
 
-## 🛠 Instalação
+# 🚀 Uso local (sem Docker)
+
+## 1️⃣ Clonar e Compilar
 
 ```bash
-git clone https://github.com/SEU_USUARIO/http-healthchecker.git
-cd http-healthchecker
+git clone https://github.com/SEU_USUARIO/go-healthcheck.git
+cd go-healthcheck
+
+go mod tidy
 go build -o healthchecker .
 ```
 
-Também pode rodar sem compilar:
+---
+
+## 2️⃣ Modo CLI Interativo
 
 ```bash
-go run . -urls https://example.com,https://httpbin.org/status/204
+./healthchecker
 ```
-🚀 Uso
-Básico 
 
-```bash
-./healthchecker -urls https://httpbin.org/status/204,https://httpbin.org/status/500
-# [https://httpbin.org/status/204] UP 204 em 180ms
-# [https://httpbin.org/status/500] DOWN 500 em 95ms
-# echo $?  # <- 1 (teve falha)
+Exemplo:
+
 ```
-JSON (NDJSON: 1 linha por URL)
-```bash
-./healthchecker -urls https://example.com,https://httpbin.org/status/500 -json
-# {"url":"https://example.com","status":200,"ms":123,"up":true}
-# {"url":"https://httpbin.org/status/500","status":500,"ms":87,"up":false}
+URL para healthcheck [Endereço ou Site]: google.com
+Timeout em segundos [3]: 5
+Arquivo de saída JSON [health.json]: resultados.json
+
+✅ https://google.com saudável! (status 200, 120ms)
+📁 Resultado adicionado em resultados.json
 ```
-Retries e concorrência
+
+---
+
+## 3️⃣ Modo CLI Não Interativo
+
 ```bash
 ./healthchecker \
-  -urls https://httpbin.org/status/503,https://httpbin.org/delay/1 \
-  -retries 3 \
-  -concurrency 5
+  -interactive=false \
+  -url=https://www.google.com \
+  -timeout=5 \
+  -out=health.json
 ```
-📋 Flags
-| Flag           | Tipo   | Padrão                | Descrição                                                              |
-| -------------- | ------ | --------------------- | ---------------------------------------------------------------------- |
-| `-urls`        | string | `https://example.com` | Lista de URLs separadas por vírgula.                                   |
-| `-retries`     | int    | `0`                   | Tentativas extras em caso de erro/UP=false (backoff: 200ms, 400ms...). |
-| `-json`        | bool   | `false`               | Imprime resultado em **JSON** (uma linha por URL).                     |
-| `-concurrency` | int    | `5`                   | Máximo de checagens em paralelo.                                       |
 
-```bash
-Validação: URLs devem começar com http:// ou https://.
-Timeout: 3s por request (ajustável no código, se quiser virar flag é simples).
+Saída:
+
 ```
-🔚 Códigos de saída
-- 0 – todas as URLs UP
-- 1 – pelo menos uma URL DOWN ou erro de rede/timeout
-- 2 – uso inválido (ex.: URLs vazias, esquema inválido)
-- Esses códigos permitem gatear stages em CI/CD.
-
-🧪 Exemplos para CI
-Bash + jq (parse do JSON)
-```bash
-set -euo pipefail
-./healthchecker -urls "https://example.com,https://httpbin.org/status/500" -json \
-  | jq -r 'select(.up==false) | "\(.url) DOWN status=\(.status) ms=\(.ms)"' \
-  && echo "Algumas URLs falharam" && exit 1 || true
+✅ https://www.google.com saudável! (status 200, 95ms)
+📁 Resultado adicionado em health.json
 ```
-GitHub Actions (job falha se alguma URL estiver DOWN)
 
-```yaml
-- name: Healthcheck
-  run: |
-    go build -o healthchecker .
-    ./healthchecker -urls "https://example.com,https://httpbin.org/status/200" -retries 2
-```
-🧠 Como funciona (visão técnica)
-- **Validação:** `net/url.ParseRequestURI` garante formato e esquema `http/https`.
-- **Checagem:** `net/http.Client{Timeout: 3s}` + `GET`.
-- **UP/DOWN:** `2xx` ou `3xx` ⇒ `UP=true`; demais ⇒ `UP=false`.
-- **Latência:** `time.Since(start).Milliseconds()`.
-- **Concorrência:** goroutines por URL + `sync.WaitGroup` + **semáforo** (`chan struct{}{}`, cap=concurrency).
-- **Retries:** laço simples com backoff linear `200ms * tentativa`.
+---
 
-🧩 Saída JSON
+## 4️⃣ Estrutura do JSON
+
 ```json
-{
-  "url": "https://example.com",
-  "status": 200,
-  "ms": 123,
-  "up": true,
-  "error": ""   // presente apenas quando falha por erro de rede/timeout
+[
+  {
+    "url": "https://www.google.com",
+    "status": "UP",
+    "code": 200,
+    "elapsed_ms": 95,
+    "checked_at": "2025-11-20T23:21:00-03:00"
+  },
+  {
+    "url": "https://www.google.com",
+    "status": "DOWN",
+    "code": 500,
+    "elapsed_ms": 80,
+    "checked_at": "2025-11-20T23:22:10-03:00"
+  }
+]
+```
+
+---
+
+# 🔧 Flags Disponíveis
+
+| Flag | Tipo | Padrão | Descrição |
+|------|------|---------|-----------|
+| `-url` | string | Endereço/Site | URL alvo do healthcheck |
+| `-timeout` | int | 3 | Timeout por request |
+| `-out` | string | health.json | Arquivo JSON de saída |
+| `-interactive` | bool | true | Perguntas interativas |
+| `-metrics` | bool | false | Ativa modo Prometheus Exporter |
+| `-interval` | int | 15 | Loop de intervalos no modo métricas |
+| `-listen` | string | :8080 | Porta do endpoint `/metrics` |
+
+---
+
+# 🧠 Arquitetura Interna
+
+## `health.go`
+
+```go
+type HealthResult struct {
+    URL       string    `json:"url"`
+    Status    string    `json:"status"`
+    Code      int       `json:"code"`
+    ElapsedMS int64     `json:"elapsed_ms"`
+    CheckedAt time.Time `json:"checked_at"`
 }
+```
+
+### 🔍 Regras Principais
+- HTTP com `http.Client{Timeout: ...}`
+- Cálculo de latência com `time.Since(start)`
+- UP = status 200–399  
+- DOWN = erro ou HTTP 400+  
+- Sempre retorna JSON consistente
+
+---
+
+## `metrics.go`
+
+### 📡 Métricas Expostas
 
 ```
-## 🐞 Troubleshooting
+healthchecker_up{url="..."} = 0 ou 1
+healthchecker_latency_ms{url="..."} = milissegundos
+```
 
-- **URL inválida:** `(use http(s)://)`  
-  ➡ Adicione `http://` ou `https://` na frente da URL.
+### 🔄 Funcionamento Interno
+- Loop interno lendo `checkHTTP()`
+- Atualiza `GaugeVec`
+- Exposição via: `/metrics`
 
-- **Timeouts frequentes:**  
-  ➡ O serviço pode estar lento; aumente o `Timeout` no código ou reduza `-concurrency`.
+---
 
-- **Saída fora de ordem:**  
-  ➡ Em modo concorrente, a ordem de impressão varia — normal.
+# 🐳 Docker
 
-## 🗺️ Roadmap
+## Build
 
-- `-timeout` como flag (em vez de valor fixo).
-- **Headers múltiplos** (`-H "Name: Value"`) usando `http.NewRequest`.
-- **Resumo final** (percentual `UP`, `p95` ms).
-- Suporte a **input por arquivo** (`-file urls.txt`).
-- Saída **JUnit/JSON** de suíte para **CI**.
+```bash
+docker build -t healthchecker:2.0 .
+```
+
+---
+
+## Modo CLI Salvando JSON no Host
+
+```bash
+mkdir -p data
+
+docker run --rm \
+  -v $(pwd)/data:/data \
+  healthchecker:2.0 \
+  -interactive=false \
+  -url=https://www.google.com \
+  -timeout=5 \
+  -out=/data/health.json
+```
+
+---
+
+## Modo Exporter (Prometheus)
+
+```bash
+docker run --rm \
+  -p 8080:8080 \
+  healthchecker:2.0 \
+  -interactive=false \
+  -url=https://www.google.com \
+  -timeout=3 \
+  -metrics=true \
+  -interval=15 \
+  -listen=:8080
+```
+
+📡 Acesse:  
+http://localhost:8080/metrics
+
+---
+
+# 📊 Stack Completa: Prometheus + Grafana
+
+O repositório inclui:
+
+- `prometheus.yml`  
+- `docker-compose.yml`  
+
+## Subir os serviços
+
+```bash
+docker compose up
+```
+
+### Endpoints
+
+- **Healthchecker** → http://localhost:8080/metrics  
+- **Prometheus** → http://localhost:9090  
+- **Grafana** → http://localhost:3000  
+  - login: `admin` / `admin`
+
+---
+
+## Configuração do Grafana
+
+1. Acesse **http://localhost:3000**
+2. Vá em: **Connections → Data Sources → Add data source**
+3. Escolha **Prometheus**
+4. Configure:
+
+```
+URL: http://prometheus:9090
+```
+
+5. Clique em **Save & Test**
+
+---
+
+## Painéis Prontos
+
+### 🔹 Status UP/DOWN
+
+```promql
+healthchecker_up{url="https://www.google.com"}
+```
+
+### 🔹 Latência (ms)
+
+```promql
+healthchecker_latency_ms{url="https://www.google.com"}
+```
+
+---
+
+# 📄 Licença
+
+MIT
