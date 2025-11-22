@@ -37,7 +37,7 @@ Cada projeto é **100% funcional**, com código aberto, documentação e exemplo
 | Projeto | Descrição | Recursos Principais | Link |
 |---------|-----------|--------------------|------|
 | 🩺 **Healthchecker** | Ferramenta CLI e Exporter em Go para healthchecks HTTP, com histórico JSON, concorrência, retries e modo Prometheus. | Status HTTP, latência, JSON incremental, endpoint `/metrics`, modo interativo e execução contínua. |[📄 Leia mais](./go-healthcheck/README.md) |
-| 💽 **Disk Usage Monitor** | Mostra uso de disco de um diretório. | Total, usado, livre, erros tratados. | [📄 Leia mais](./go-diskmonitor/README.md) |
+| 🧩 **Disk Usage Monitor** | Observabilidade completa do uso de disco em Linux e Windows. | Coleta de filesystem, hotspots, thresholds, limpeza automática, métricas Prometheus e dashboard Grafana. | [📄 Leia mais](./go-diskmonitor/README.md) |
 | 📊 **Prometheus Healthcheck Exporter** | Exporter que expõe métricas HTTP. | UP/DOWN, latência, status code, deploy em Kubernetes. | [📄 Leia mais](./prometheus-healthcheck-exporter/README.md) |
 | 🔍 **Release Checker API** | API para buscar última release de um repositório. | JSON output, integração CI/CD. | [📄 Leia mais](./release-checker-api/README.md) |
 | 🧾 **LogWatcher** | Tail de logs com regex, rotação, múltiplos arquivos, deduplicação/cooldown, métricas Prometheus e webhook. | Regex, fsnotify, glob múltiplo, Prometheus, webhook. | [📄 Leia mais](./logwatcher/README.md) |
