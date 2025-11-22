@@ -1,4 +1,4 @@
-# 🧩 **go-diskmonitor — Disk Usage Monitor em Go**
+# 🧩 **Disk Usage Monitor em Go**
 
 <div align="center">
 
